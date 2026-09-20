@@ -1,0 +1,17 @@
+{
+  "name": "azure-tenant-governance-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "^4.25.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.7"
+  }
+}
