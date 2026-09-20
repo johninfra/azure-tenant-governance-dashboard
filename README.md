@@ -15,7 +15,6 @@ The dashboard is deployed from this repository through GitHub Actions to Azure S
 ### Azure Static Web App deployment
 
 ![Azure Static Web App deployment](screenshots/azure-static-web-app.jpg)
-
 ## What it does
 
 - Inventories Entra users, guest users, groups, and service principals.
