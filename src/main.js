@@ -5,7 +5,7 @@ const GRAPH_SCOPES=['User.Read','Directory.Read.All','RoleManagement.Read.Direct
 const ARM_SCOPES=['https://management.azure.com/user_impersonation'];
 const KEY='azureTenantGovernanceConfig.v1';
 
-const state={config:loadConfig(),msal:null,account:null,tab:'overview',loading:false,error:'',warnings:[],mfaUnavailable:false,mfaMessage:'',loadedAt:null,search:'',data:{users:[],groups:[],servicePrincipals:[],mfa:[],directoryRoles:[],azureRoleAssignments:[],azureRoleDefinitions:[],resourceGroups:[],findings:[]}};
+const state={config:loadConfig(),msal:null,account:null,tab:'overview',loading:false,error:'',warnings:[],mfaUnavailable:false,mfaMessage:'',loadedAt:null,search:'',data:{users:[],groups:[],groupMemberships:{},servicePrincipals:[],mfa:[],directoryRoles:[],azureRoleAssignments:[],azureRoleDefinitions:[],resourceGroups:[],findings:[]}};
 const app=document.querySelector('#app');
 
 function loadConfig(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return{}}}
@@ -52,7 +52,13 @@ async function paged(url,token){
  while(next){const b=await api(next,token);rows.push(...(b.value||[]));next=b['@odata.nextLink']||b.nextLink||null}
  return rows;
 }
-function resetData(){state.data={users:[],groups:[],servicePrincipals:[],mfa:[],directoryRoles:[],azureRoleAssignments:[],azureRoleDefinitions:[],resourceGroups:[],findings:[]};state.loadedAt=null;state.warnings=[];state.mfaUnavailable=false;state.mfaMessage=''}
+async function mapLimit(items,limit,worker){
+ const out=new Array(items.length);let cursor=0;
+ async function run(){while(true){const i=cursor++;if(i>=items.length)return;out[i]=await worker(items[i],i)}}
+ await Promise.all(Array.from({length:Math.min(limit,items.length)},run));
+ return out;
+}
+function resetData(){state.data={users:[],groups:[],groupMemberships:{},servicePrincipals:[],mfa:[],directoryRoles:[],azureRoleAssignments:[],azureRoleDefinitions:[],resourceGroups:[],findings:[]};state.loadedAt=null;state.warnings=[];state.mfaUnavailable=false;state.mfaMessage=''}
 
 async function loadTenantData(){
  if(!state.account)return signIn();
@@ -66,6 +72,16 @@ async function loadTenantData(){
    paged(base+'/servicePrincipals?$select=id,displayName,appId,servicePrincipalType&$top=999',gt)
   ]);
   Object.assign(state.data,{users,groups,servicePrincipals:sps});
+  const memberships=await mapLimit(groups,5,async group=>{
+   try{
+    const members=await paged(`${base}/groups/${group.id}/members/microsoft.graph.user?$select=id,displayName,userPrincipalName,userType,accountEnabled&$top=999`,gt);
+    return [group.id,members];
+   }catch(e){
+    state.warnings.push(`Could not read users for group ${group.displayName}: ${norm(e)}`);
+    return [group.id,[]];
+   }
+  });
+  state.data.groupMemberships=Object.fromEntries(memberships);
   try{state.data.mfa=await paged(base+'/reports/authenticationMethods/userRegistrationDetails?$top=999',gt)}catch(e){state.mfaUnavailable=true;state.mfaMessage=mfaUnavailableMessage(e)}
   try{
    const roles=await paged(base+'/directoryRoles?$select=id,displayName,roleTemplateId',gt);
@@ -116,6 +132,8 @@ function mfaUnavailableMessage(e){const raw=e?.message||e?.errorMessage||String(
 function connectionStatus(){if(!state.account)return '';if(state.loading)return '<span class="connection-status syncing"><span class="status-dot"></span>Syncing tenant data</span>';if(state.loadedAt)return '<span class="connection-status live"><span class="status-dot"></span>Live Tenant Connected</span>';return '<span class="connection-status pending"><span class="status-dot"></span>Tenant authenticated</span>'}
 function mfaPct(){return state.data.mfa.length?state.data.mfa.filter(x=>x.isMfaCapable).length/state.data.mfa.length*100:NaN}
 function roleMembers(){return state.data.directoryRoles.reduce((n,r)=>n+(r.members?.length||0),0)}
+function groupMembershipCount(){return Object.values(state.data.groupMemberships||{}).reduce((n,m)=>n+(m?.length||0),0)}
+function groupType(g){if((g.groupTypes||[]).includes('Unified'))return 'Microsoft 365';if(g.securityEnabled)return 'Security';if(g.mailEnabled)return 'Mail-enabled';return 'Directory'}
 function stat(label,value,meta=''){return `<div class="card stat"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div><div class="stat-meta">${esc(meta)}</div></div>`}
 function badge(v,c='neutral'){return `<span class="badge ${c}">${esc(v)}</span>`}
 function nav(id,label){return `<button class="${state.tab===id?'active':''}" data-tab="${id}">${label}</button>`}
@@ -130,7 +148,7 @@ function render(){
  ${state.error?`<div class="notice error"><strong>Error:</strong> ${esc(state.error)}</div>`:''}
  ${state.mfaUnavailable?`<div class="notice info"><strong>MFA report unavailable:</strong> ${esc(state.mfaMessage)}</div>`:''}
  ${state.warnings.map(w=>`<div class="notice warn"><strong>Partial data:</strong> ${esc(w)}</div>`).join('')}
- <nav class="nav">${nav('overview','Overview')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('setup','Setup')}</nav>
+ <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('setup','Setup')}</nav>
  ${renderTab()}
  <footer class="footer"><span>Read-only governance utility • no secrets required in source</span><span>${state.loadedAt?'Snapshot: '+esc(state.loadedAt.toLocaleString()):'No tenant snapshot loaded yet'}</span></footer>
  </main>`;wire();
@@ -141,13 +159,13 @@ function renderTab(){
  if(!state.account)return '<div class="card empty">Sign in with the Entra account you want to use for the read-only review.</div>';
  if(!state.loadedAt&&!state.loading)return '<div class="card empty">Signed in successfully. Select <strong>Refresh tenant data</strong> to build the first governance snapshot.</div>';
  if(state.loading&&!state.loadedAt)return '<div class="card empty">Querying Microsoft Graph and Azure Resource Manager…</div>';
- return ({mfa:renderMfa,roles:renderRoles,rbac:renderRbac,findings:renderFindings}[state.tab]||renderOverview)();
+ return ({groups:renderGroups,mfa:renderMfa,roles:renderRoles,rbac:renderRbac,findings:renderFindings}[state.tab]||renderOverview)();
 }
 function renderOverview(){
  const p=mfaPct(),high=state.data.findings.filter(f=>f.severity==='high').length;
  return `<section><div class="grid stats">
  ${stat('Users',state.data.users.length,`${state.data.users.filter(x=>x.userType==='Guest').length} guests`)}
- ${stat('Groups',state.data.groups.length,`${state.data.groups.filter(x=>x.securityEnabled).length} security groups`)}
+ ${stat('Groups',state.data.groups.length,`${state.data.groups.filter(x=>x.securityEnabled).length} security groups • ${groupMembershipCount()} user memberships`)}
  ${stat('MFA capable',pct(p),state.data.mfa.length?`${state.data.mfa.filter(x=>x.isMfaCapable).length}/${state.data.mfa.length} reported users`:state.mfaUnavailable?'tenant report unavailable':'not loaded')}
  ${stat('Entra role members',roleMembers(),`${state.data.directoryRoles.length} activated roles`)}
  ${stat('Azure RBAC',state.data.azureRoleAssignments.length,`${state.data.resourceGroups.length} resource groups`)}
@@ -157,11 +175,21 @@ function renderOverview(){
  <div class="card"><div class="section-title"><h2>Highest-priority findings</h2><button class="btn" data-tab="findings">View all</button></div>${state.data.findings.length?state.data.findings.slice(0,5).map(f=>`<div class="finding"><div>${badge(f.severity.toUpperCase(),f.severity)}</div><div><h3>${esc(f.title)}</h3><p>${esc(f.subject||f.detail)}</p></div></div>`).join(''):'<div class="empty">No heuristic findings generated. No tested condition was detected. This is not a certification that the tenant is secure.</div>'}</div>
  </div></section>`;
 }
+function renderGroups(){
+ const q=state.search.toLowerCase();
+ const groups=[...state.data.groups].sort((a,b)=>(a.displayName||'').localeCompare(b.displayName||''));
+ const rows=groups.filter(g=>{
+  const members=state.data.groupMemberships?.[g.id]||[];
+  const hay=`${g.displayName||''} ${groupType(g)} ${members.map(m=>`${m.displayName||''} ${m.userPrincipalName||''} ${m.userType||''}`).join(' ')}`.toLowerCase();
+  return !q||hay.includes(q);
+ });
+ return `<section class="card"><div class="section-title"><div><h2>Tenant groups & user membership</h2><div class="muted small">Live Microsoft Graph snapshot • direct user members</div></div><span class="muted small">${rows.length} groups • ${groupMembershipCount()} user memberships</span></div>${toolbar('Search groups, users, UPNs, or group type…')}<div class="group-list">${rows.map(g=>{const members=(state.data.groupMemberships?.[g.id]||[]).slice().sort((a,b)=>(a.displayName||'').localeCompare(b.displayName||''));return `<details class="group-panel" ${q?'open':''}><summary><span class="group-summary-main"><strong>${esc(g.displayName||'Unnamed group')}</strong><span class="group-meta">${badge(groupType(g),g.securityEnabled?'good':'neutral')}${g.mailEnabled?badge('Mail enabled','neutral'):''}</span></span><span class="member-count">${members.length} user${members.length===1?'':'s'}</span></summary>${members.length?`<div class="table-wrap group-table"><table><thead><tr><th>User</th><th>UPN</th><th>Type</th><th>Account</th></tr></thead><tbody>${members.map(m=>`<tr><td><strong>${esc(m.displayName||'Unnamed user')}</strong></td><td>${esc(m.userPrincipalName||'—')}</td><td>${esc(m.userType||'Member')}</td><td>${badge(m.accountEnabled===false?'Disabled':'Enabled',m.accountEnabled===false?'high':'good')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="group-empty">No direct user members returned for this group.</div>'}</details>`}).join('')||'<div class="empty">No groups match the current filter.</div>'}</div></section>`;
+}
 function renderMfa(){if(state.mfaUnavailable)return `<section class="card"><div class="section-title"><h2>MFA & authentication registration</h2>${badge('Unavailable','neutral')}</div><div class="mfa-unavailable large"><div class="mfa-icon">i</div><div><strong>Authentication Methods registration report unavailable</strong><p>${esc(state.mfaMessage)}</p><p class="muted small">This does not affect Users, Groups, Entra roles, Azure RBAC, or governance findings based on the available data.</p></div></div></section>`;const q=state.search.toLowerCase(),rows=state.data.mfa.filter(x=>!q||`${x.userDisplayName} ${x.userPrincipalName} ${(x.methodsRegistered||[]).join(' ')}`.toLowerCase().includes(q));return `<section class="card"><div class="section-title"><h2>MFA & authentication registration</h2><span class="muted small">${rows.length} rows</span></div>${toolbar('Search users, UPNs, or methods…')}<div class="table-wrap"><table><thead><tr><th>User</th><th>Type</th><th>MFA capable</th><th>MFA registered</th><th>Passwordless</th><th>Methods</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x.userDisplayName)}</strong><br><span class="muted">${esc(x.userPrincipalName)}</span></td><td>${esc(x.userType)}</td><td>${badge(x.isMfaCapable?'Yes':'No',x.isMfaCapable?'good':'high')}</td><td>${badge(x.isMfaRegistered?'Yes':'No',x.isMfaRegistered?'good':'medium')}</td><td>${badge(x.isPasswordlessCapable?'Yes':'No',x.isPasswordlessCapable?'good':'neutral')}</td><td>${esc((x.methodsRegistered||[]).join(', ')||'—')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">No MFA data returned.</td></tr>'}</tbody></table></div></section>`}
 function renderRoles(){const q=state.search.toLowerCase(),flat=state.data.directoryRoles.flatMap(r=>(r.members||[]).map(m=>({role:r.displayName,...m}))),rows=flat.filter(x=>!q||`${x.role} ${x.displayName} ${x.userPrincipalName||''}`.toLowerCase().includes(q));return `<section class="card"><div class="section-title"><h2>Active Entra directory role memberships</h2><span class="muted small">${rows.length} assignments</span></div>${toolbar('Search role or principal…')}<div class="table-wrap"><table><thead><tr><th>Role</th><th>Member</th><th>Principal</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x.role)}</strong></td><td>${esc(x.displayName)}</td><td>${esc(x.userPrincipalName||x.id)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty">No active role memberships returned.</td></tr>'}</tbody></table></div></section>`}
 function renderRbac(){const q=state.search.toLowerCase(),rows=state.data.azureRoleAssignments.filter(a=>!q||`${a._roleName} ${a._principalName} ${a._principalType} ${a.properties?.scope}`.toLowerCase().includes(q));return `<section class="card"><div class="section-title"><h2>Azure RBAC assignments</h2><span class="muted small">Subscription: ${esc(state.config.subscriptionId||'not configured')}</span></div>${toolbar('Search role, principal, type, or scope…')}<div class="table-wrap"><table><thead><tr><th>Role</th><th>Principal</th><th>Type</th><th>Scope</th></tr></thead><tbody>${rows.map(a=>`<tr><td><strong>${esc(a._roleName)}</strong></td><td>${esc(a._principalName)}${a._upn?`<br><span class="muted">${esc(a._upn)}</span>`:''}</td><td>${esc(a._principalType)}</td><td><code>${esc(shortScope(a.properties?.scope||''))}</code></td></tr>`).join('')||'<tr><td colspan="4" class="empty">No RBAC assignments returned.</td></tr>'}</tbody></table></div></section>`}
 function renderFindings(){const q=state.search.toLowerCase(),rows=state.data.findings.filter(f=>!q||`${f.severity} ${f.title} ${f.detail} ${f.subject}`.toLowerCase().includes(q));return `<section class="card"><div class="section-title"><div><h2>Governance review findings</h2><div class="muted small">Heuristic review — validate findings against business requirements.</div></div><div><button class="btn" data-action="export-json">Export JSON</button> <button class="btn" data-action="export-csv">Export CSV</button></div></div>${toolbar('Search findings…')}${rows.length?rows.map(f=>`<div class="finding"><div>${badge(f.severity.toUpperCase(),f.severity)}</div><div><h3>${esc(f.title)}</h3><p>${esc(f.detail)}</p>${f.subject?`<div class="muted small subject">Subject: ${esc(f.subject)}</div>`:''}</div></div>`).join(''):(state.data.findings.length?'<div class="empty">No findings match the current filter.</div>':'<div class="empty">No heuristic findings generated. No tested condition was detected. This is not a certification that the tenant is secure.</div>')}</section>`}
-function renderSetup(){return `<section class="grid two-col"><div class="card"><div class="section-title"><h2>Application configuration</h2>${badge('Browser-local')}</div><div class="form-grid"><div class="field"><label>Tenant ID</label><input id="tenantId" value="${esc(state.config.tenantId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div><div class="field"><label>Client / Application ID</label><input id="clientId" value="${esc(state.config.clientId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div><div class="field full"><label>Azure Subscription ID</label><input id="subscriptionId" value="${esc(state.config.subscriptionId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div></div><div class="buttons"><button class="btn primary" data-action="save-config">Save configuration</button><button class="btn danger" data-action="clear-config">Clear configuration</button></div><p class="muted small">These values are identifiers, not secrets. Never add a client secret to this SPA.</p></div><div class="card"><h2>Entra app registration checklist</h2><ol class="checklist"><li>Create a <strong>Single-page application (SPA)</strong> app registration.</li><li>Add redirect URI: <div class="code">${esc(location.origin)}</div></li><li>Add delegated Graph permissions: <strong>User.Read</strong>, <strong>Directory.Read.All</strong>, <strong>RoleManagement.Read.Directory</strong>, <strong>AuditLog.Read.All</strong>.</li><li>Add Azure Service Management delegated <strong>user_impersonation</strong>.</li><li>Grant tenant admin consent where required.</li><li>Use an account with read access to the requested directory reports and Azure scope.</li></ol></div><div class="card"><h2>Security model</h2><ul class="checklist"><li>Read-only Graph and ARM operations.</li><li>No client secret.</li><li>MSAL token cache uses session storage.</li><li>Only non-secret IDs are stored locally.</li><li>No project backend receives tenant data.</li></ul></div><div class="card"><h2>What it checks</h2><ul class="checklist"><li>MFA and passwordless readiness.</li><li>Active Entra directory roles.</li><li>Azure RBAC scope breadth.</li><li>Subscription-wide Owner, Contributor, and User Access Administrator.</li><li>Privileged identities without reported MFA capability.</li><li>Guest identities with broad Azure access.</li></ul></div></section>`}
+function renderSetup(){return `<section class="grid two-col"><div class="card"><div class="section-title"><h2>Application configuration</h2>${badge('Browser-local')}</div><div class="form-grid"><div class="field"><label>Tenant ID</label><input id="tenantId" value="${esc(state.config.tenantId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div><div class="field"><label>Client / Application ID</label><input id="clientId" value="${esc(state.config.clientId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div><div class="field full"><label>Azure Subscription ID</label><input id="subscriptionId" value="${esc(state.config.subscriptionId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div></div><div class="buttons"><button class="btn primary" data-action="save-config">Save configuration</button><button class="btn danger" data-action="clear-config">Clear configuration</button></div><p class="muted small">These values are identifiers, not secrets. Never add a client secret to this SPA.</p></div><div class="card"><h2>Entra app registration checklist</h2><ol class="checklist"><li>Create a <strong>Single-page application (SPA)</strong> app registration.</li><li>Add redirect URI: <div class="code">${esc(location.origin)}</div></li><li>Add delegated Graph permissions: <strong>User.Read</strong>, <strong>Directory.Read.All</strong>, <strong>RoleManagement.Read.Directory</strong>, <strong>AuditLog.Read.All</strong>.</li><li>Add Azure Service Management delegated <strong>user_impersonation</strong>.</li><li>Grant tenant admin consent where required.</li><li>Use an account with read access to the requested directory reports and Azure scope.</li></ol></div><div class="card"><h2>Security model</h2><ul class="checklist"><li>Read-only Graph and ARM operations.</li><li>No client secret.</li><li>MSAL token cache uses session storage.</li><li>Only non-secret IDs are stored locally.</li><li>No project backend receives tenant data.</li></ul></div><div class="card"><h2>What it checks</h2><ul class="checklist"><li>Tenant groups and direct user membership.</li><li>MFA and passwordless readiness.</li><li>Active Entra directory roles.</li><li>Azure RBAC scope breadth.</li><li>Subscription-wide Owner, Contributor, and User Access Administrator.</li><li>Privileged identities without reported MFA capability.</li><li>Guest identities with broad Azure access.</li></ul></div></section>`}
 
 function wire(){
  document.querySelectorAll('[data-tab]').forEach(x=>x.addEventListener('click',()=>{state.tab=x.dataset.tab;state.search='';render()}));
