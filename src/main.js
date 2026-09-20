@@ -89,9 +89,9 @@ async function loadTenantData(){
   }catch(e){state.warnings.push('Directory role data unavailable: '+norm(e))}
   try{
    const [directoryRoleDefinitions,activeSchedules,eligibleSchedules]=await Promise.all([
-    paged(base+'/roleManagement/directory/roleDefinitions?$select=id,displayName,isBuiltIn,isEnabled&$top=999',gt),
-    paged(base+'/roleManagement/directory/roleAssignmentScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,assignmentType,memberType&$top=999',gt),
-    paged(base+'/roleManagement/directory/roleEligibilityScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,memberType&$top=999',gt)
+    paged(base+'/roleManagement/directory/roleDefinitions',gt),
+    paged(base+'/roleManagement/directory/roleAssignmentScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,assignmentType,memberType',gt),
+    paged(base+'/roleManagement/directory/roleEligibilityScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,memberType',gt)
    ]);
    Object.assign(state.data,{directoryRoleDefinitions,privilegedRoleAssignments:activeSchedules,privilegedRoleEligibilities:eligibleSchedules});
   }catch(e){state.warnings.push('Privileged role schedule data unavailable: '+norm(e))}
