@@ -88,13 +88,47 @@ async function loadTenantData(){
    for(const role of roles){let members=[];try{members=await paged(`${base}/directoryRoles/${role.id}/members?$select=id,displayName,userPrincipalName`,gt)}catch(e){state.warnings.push(`Could not read members for ${role.displayName}: ${norm(e)}`)}state.data.directoryRoles.push({...role,members})}
   }catch(e){state.warnings.push('Directory role data unavailable: '+norm(e))}
   try{
-   const [directoryRoleDefinitions,activeSchedules,eligibleSchedules]=await Promise.all([
+   const [directoryRoleDefinitions,activeAssignments]=await Promise.all([
     paged(base+'/roleManagement/directory/roleDefinitions',gt),
-    paged(base+'/roleManagement/directory/roleAssignmentScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,assignmentType,memberType',gt),
-    paged(base+'/roleManagement/directory/roleEligibilityScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,memberType',gt)
+    paged(base+'/roleManagement/directory/roleAssignments?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId',gt)
    ]);
-   Object.assign(state.data,{directoryRoleDefinitions,privilegedRoleAssignments:activeSchedules,privilegedRoleEligibilities:eligibleSchedules});
-  }catch(e){state.warnings.push('Privileged role schedule data unavailable: '+norm(e))}
+   Object.assign(state.data,{directoryRoleDefinitions,privilegedRoleAssignments:activeAssignments,privilegedRoleEligibilities:[]});
+
+   // PIM schedule/eligibility endpoints require Entra ID P2 or Entra ID Governance.
+   // When licensed, prefer the richer schedule instances because they include timing
+   // and eligible-role data. On unlicensed tenants, keep the standard active RBAC
+   // assignments above instead of treating the license limitation as an error.
+   try{
+    const [activeSchedules,eligibleSchedules]=await Promise.all([
+     paged(base+'/roleManagement/directory/roleAssignmentScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,assignmentType,memberType',gt),
+     paged(base+'/roleManagement/directory/roleEligibilityScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,memberType',gt)
+    ]);
+    if(activeSchedules.length) state.data.privilegedRoleAssignments=activeSchedules;
+    state.data.privilegedRoleEligibilities=eligibleSchedules;
+   }catch(e){
+    const raw=e?.message||e?.errorMessage||String(e||'');
+    if(!/Entra ID P2|Entra ID Governance|premium license|license/i.test(raw)){
+     state.warnings.push('PIM schedule data unavailable: '+norm(e));
+    }
+   }
+  }catch(e){
+   // Final fallback: use the already-loaded active directory-role memberships.
+   // This keeps active privileged-role visibility available even when unified RBAC
+   // cannot be read by the current signed-in identity.
+   const fallback=state.data.directoryRoles.flatMap(role=>(role.members||[]).map(member=>({
+    id:`legacy:${role.id}:${member.id}`,
+    principalId:member.id,
+    roleDefinitionId:role.roleTemplateId||role.id,
+    directoryScopeId:'/',
+    _roleName:role.displayName,
+    _principalName:member.displayName,
+    _upn:member.userPrincipalName||'',
+    _source:'directoryRoles'
+   })));
+   state.data.privilegedRoleAssignments=fallback;
+   state.data.privilegedRoleEligibilities=[];
+   if(!fallback.length) state.warnings.push('Privileged role data unavailable: '+norm(e));
+  }
   if(guid(state.config.subscriptionId||'')){
    try{
     const at=await acquire(ARM_SCOPES), sub=state.config.subscriptionId.trim(), arm=`https://management.azure.com/subscriptions/${sub}`;
@@ -120,13 +154,16 @@ function enrichAssignments(){
 }
 function enrichPrivilegedRoles(){
  const defs=new Map(state.data.directoryRoleDefinitions.map(r=>[r.id,r.displayName||'Unknown role']));
- const users=new Map(state.data.users.map(u=>[u.id,u]));
- const enrich=(x,access)=>{const u=users.get(x.principalId)||{};return {...x,_access:access,_roleName:defs.get(x.roleDefinitionId)||x.roleDefinitionId||'Unknown role',_principalName:u.displayName||x.principalId,_upn:u.userPrincipalName||'',_userType:u.userType||'Unknown'}};
+ const principals=new Map();
+ state.data.users.forEach(u=>principals.set(u.id,{name:u.displayName,upn:u.userPrincipalName,type:u.userType==='Guest'?'Guest user':'User'}));
+ state.data.groups.forEach(g=>principals.set(g.id,{name:g.displayName,type:'Group'}));
+ state.data.servicePrincipals.forEach(s=>principals.set(s.id,{name:s.displayName,type:'Service principal'}));
+ const enrich=(x,access)=>{const p=principals.get(x.principalId)||{};return {...x,_access:access,_roleName:x._roleName||defs.get(x.roleDefinitionId)||x.roleDefinitionId||'Unknown role',_principalName:x._principalName||p.name||x.principalId,_upn:x._upn||p.upn||'',_principalType:p.type||'Unknown'}};
  state.data.privilegedRoleAssignments=state.data.privilegedRoleAssignments.map(x=>enrich(x,'Active'));
  state.data.privilegedRoleEligibilities=state.data.privilegedRoleEligibilities.map(x=>enrich(x,'Eligible'));
 }
 function privilegedRows(){return [...state.data.privilegedRoleAssignments,...state.data.privilegedRoleEligibilities]}
-function privilegedUsers(){return new Set(privilegedRows().map(x=>x.principalId).filter(Boolean))}
+function privilegedUsers(){return new Set(privilegedRows().filter(x=>x._principalType==='User'||x._principalType==='Guest user'||x._source==='directoryRoles').map(x=>x.principalId).filter(Boolean))}
 function rolesForUser(id){return privilegedRows().filter(x=>x.principalId===id).sort((a,b)=>(a._roleName||'').localeCompare(b._roleName||''))}
 function fmtDate(v){if(!v)return 'Not exposed';const d=new Date(v);return Number.isNaN(d.getTime())?v:d.toLocaleString()}
 function directoryScope(v){return !v||v==='/'?'Tenant-wide':v}
@@ -209,7 +246,7 @@ function renderPrivileged(){
  const q=state.search.toLowerCase();
  const rows=privilegedRows().filter(x=>!q||`${x._principalName} ${x._upn} ${x._roleName} ${x._access} ${x.memberType||''} ${x.directoryScopeId||''}`.toLowerCase().includes(q))
   .sort((a,b)=>a._principalName.localeCompare(b._principalName)||a._roleName.localeCompare(b._roleName)||a._access.localeCompare(b._access));
- return `<section class="card"><div class="section-title"><div><h2>Privileged Entra role access</h2><div class="muted small">Active and eligible Microsoft Entra role schedule instances from Microsoft Graph</div></div><span class="muted small">${privilegedUsers().size} users • ${state.data.privilegedRoleAssignments.length} active • ${state.data.privilegedRoleEligibilities.length} eligible</span></div>${toolbar('Search user, role, access state, or scope…')}<div class="table-wrap"><table><thead><tr><th>User</th><th>Role</th><th>Access</th><th>Assignment</th><th>Started / assigned</th><th>Ends</th><th>Scope</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x._principalName)}</strong>${x._upn?`<br><span class="muted">${esc(x._upn)}</span>`:''}</td><td><strong>${esc(x._roleName)}</strong></td><td>${badge(x._access,x._access==='Active'?'high':'medium')}</td><td>${esc(x.memberType||x.assignmentType||'Direct')}</td><td>${esc(fmtDate(x.startDateTime))}</td><td>${esc(x.endDateTime?fmtDate(x.endDateTime):'Permanent / no end exposed')}</td><td><code>${esc(directoryScope(x.directoryScopeId||x.appScopeId||'/'))}</code></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No privileged role schedule instances were returned. If legacy active role memberships exist, use the Entra roles tab; assignment timestamps may not be exposed for those records.</td></tr>'}</tbody></table></div><div class="notice info privileged-note"><strong>Assignment timing:</strong> Microsoft Graph exposes <code>startDateTime</code> and <code>endDateTime</code> for role schedule instances. For older or permanent assignments, the original historical assignment event may not be available here, so the dashboard shows “Not exposed” instead of guessing.</div></section>`;
+ return `<section class="card"><div class="section-title"><div><h2>Privileged Entra role access</h2><div class="muted small">Active Entra role assignments are shown on supported tenants. PIM eligible-role and schedule timing data appears when the tenant has Entra ID P2 or Entra ID Governance.</div></div><span class="muted small">${privilegedUsers().size} users • ${state.data.privilegedRoleAssignments.length} active • ${state.data.privilegedRoleEligibilities.length} eligible</span></div>${toolbar('Search user, role, access state, or scope…')}<div class="table-wrap"><table><thead><tr><th>User</th><th>Role</th><th>Access</th><th>Assignment</th><th>Started / assigned</th><th>Ends</th><th>Scope</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x._principalName)}</strong>${x._upn?`<br><span class="muted">${esc(x._upn)}</span>`:''}</td><td><strong>${esc(x._roleName)}</strong></td><td>${badge(x._access,x._access==='Active'?'high':'medium')}</td><td>${esc(x.memberType||x.assignmentType||'Direct')}</td><td>${esc(fmtDate(x.startDateTime))}</td><td>${esc(x.endDateTime?fmtDate(x.endDateTime):'Permanent / no end exposed')}</td><td><code>${esc(directoryScope(x.directoryScopeId||x.appScopeId||'/'))}</code></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No active privileged Entra role assignments were returned for the signed-in identity.</td></tr>'}</tbody></table></div><div class="notice info privileged-note"><strong>Assignment timing:</strong> Standard active Entra role assignments do not expose historical assignment timestamps. PIM schedule dates and eligible assignments require Entra ID P2 or Entra ID Governance, so this dashboard shows “Not exposed” rather than guessing when that licensed telemetry is unavailable.</div></section>`;
 }
 function renderMfa(){if(state.mfaUnavailable)return `<section class="card"><div class="section-title"><h2>MFA & authentication registration</h2>${badge('Unavailable','neutral')}</div><div class="mfa-unavailable large"><div class="mfa-icon">i</div><div><strong>Authentication Methods registration report unavailable</strong><p>${esc(state.mfaMessage)}</p><p class="muted small">This does not affect Users, Groups, Entra roles, Azure RBAC, or governance findings based on the available data.</p></div></div></section>`;const q=state.search.toLowerCase(),rows=state.data.mfa.filter(x=>!q||`${x.userDisplayName} ${x.userPrincipalName} ${(x.methodsRegistered||[]).join(' ')}`.toLowerCase().includes(q));return `<section class="card"><div class="section-title"><h2>MFA & authentication registration</h2><span class="muted small">${rows.length} rows</span></div>${toolbar('Search users, UPNs, or methods…')}<div class="table-wrap"><table><thead><tr><th>User</th><th>Type</th><th>MFA capable</th><th>MFA registered</th><th>Passwordless</th><th>Methods</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x.userDisplayName)}</strong><br><span class="muted">${esc(x.userPrincipalName)}</span></td><td>${esc(x.userType)}</td><td>${badge(x.isMfaCapable?'Yes':'No',x.isMfaCapable?'good':'high')}</td><td>${badge(x.isMfaRegistered?'Yes':'No',x.isMfaRegistered?'good':'medium')}</td><td>${badge(x.isPasswordlessCapable?'Yes':'No',x.isPasswordlessCapable?'good':'neutral')}</td><td>${esc((x.methodsRegistered||[]).join(', ')||'—')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">No MFA data returned.</td></tr>'}</tbody></table></div></section>`}
 function renderRoles(){const q=state.search.toLowerCase(),flat=state.data.directoryRoles.flatMap(r=>(r.members||[]).map(m=>({role:r.displayName,...m}))),rows=flat.filter(x=>!q||`${x.role} ${x.displayName} ${x.userPrincipalName||''}`.toLowerCase().includes(q));return `<section class="card"><div class="section-title"><h2>Active Entra directory role memberships</h2><span class="muted small">${rows.length} assignments</span></div>${toolbar('Search role or principal…')}<div class="table-wrap"><table><thead><tr><th>Role</th><th>Member</th><th>Principal</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x.role)}</strong></td><td>${esc(x.displayName)}</td><td>${esc(x.userPrincipalName||x.id)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty">No active role memberships returned.</td></tr>'}</tbody></table></div></section>`}
