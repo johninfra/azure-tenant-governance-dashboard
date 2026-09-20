@@ -2,6 +2,14 @@
 
 A read-only JavaScript/Vite web app for Microsoft Entra ID and Azure access governance. The dashboard authenticates a tenant reader/admin with MSAL, queries Microsoft Graph and Azure Resource Manager, then produces an interactive governance snapshot focused on identity posture, MFA, privileged access, Azure RBAC, and least privilege.
 
+## Live deployment
+
+**Production Azure Static Web App:** https://icy-forest-0df58d91e.6.azurestaticapps.net
+
+The dashboard is deployed from this repository through GitHub Actions to Azure Static Web Apps and is connected to Microsoft Entra ID, Microsoft Graph, and Azure Resource Manager for live tenant governance data.
+
+![Live Azure Tenant Governance Dashboard](assets/live-dashboard.jpg)
+
 ## What it does
 
 - Inventories Entra users, guest users, groups, and service principals.
