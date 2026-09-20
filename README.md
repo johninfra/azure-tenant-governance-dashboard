@@ -19,6 +19,7 @@ The dashboard is deployed from this repository through GitHub Actions to Azure S
 ## What it does
 
 - Inventories Entra users, guest users, groups, and service principals.
+- Syncs each tenant group with its direct user members in an expandable **Groups & Members** view.
 - Reviews MFA-capable, MFA-registered, and passwordless-capable users.
 - Enumerates active Entra directory roles and their members.
 - Inventories Azure RBAC role assignments at subscription and resource scopes.
@@ -40,7 +41,9 @@ Browser SPA
   |      +-- Microsoft Entra ID
   |
   |-- Microsoft Graph
+- Entra group membership inventory
   |      |-- Users / Groups / Service Principals
+  |      |-- Group → direct user membership
   |      |-- Directory Roles
   |      +-- Authentication Methods Registration Report
   |
