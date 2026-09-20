@@ -8,7 +8,13 @@ A read-only JavaScript/Vite web app for Microsoft Entra ID and Azure access gove
 
 The dashboard is deployed from this repository through GitHub Actions to Azure Static Web Apps and is connected to Microsoft Entra ID, Microsoft Graph, and Azure Resource Manager for live tenant governance data.
 
-![Live Azure Tenant Governance Dashboard](assets/live-dashboard.jpg)
+### Live tenant dashboard
+
+![Live Azure Tenant Governance Dashboard](screenshots/live-tenant-dashboard.jpg)
+
+### Azure Static Web App deployment
+
+![Azure Static Web App deployment](screenshots/azure-static-web-app.jpg)
 
 ## What it does
 
