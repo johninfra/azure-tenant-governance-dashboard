@@ -22,6 +22,7 @@ The dashboard is deployed from this repository through GitHub Actions to Azure S
 - Syncs each tenant group with its direct user members in an expandable **Groups & Members** view.
 - Reviews MFA-capable, MFA-registered, and passwordless-capable users.
 - Enumerates active Entra directory roles and their members.
+- Adds a **Privileged Access** view showing users with active or eligible Entra privileged roles, role names, scope, assignment type, and start/end timestamps when Microsoft Graph exposes them.
 - Inventories Azure RBAC role assignments at subscription and resource scopes.
 - Flags broad Owner, Contributor, and User Access Administrator assignments.
 - Flags privileged Entra identities that are not reported as MFA-capable.
@@ -45,6 +46,8 @@ Browser SPA
   |      |-- Users / Groups / Service Principals
   |      |-- Group → direct user membership
   |      |-- Directory Roles
+  |      |-- Role Assignment Schedule Instances
+  |      |-- Role Eligibility Schedule Instances
   |      +-- Authentication Methods Registration Report
   |
   +-- Azure Resource Manager
