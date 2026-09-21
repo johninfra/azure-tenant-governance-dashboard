@@ -1,6 +1,7 @@
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
 import './styles.css';
 import { renderTopology } from './topology.js';
+import { renderInterview } from './interview.js';
 
 const GRAPH_SCOPES=['User.Read','Directory.Read.All','RoleManagement.Read.Directory','AuditLog.Read.All','UserAuthenticationMethod.Read.All','Policy.Read.AuthenticationMethod'];
 const ARM_SCOPES=['https://management.azure.com/user_impersonation'];
@@ -276,13 +277,14 @@ function render(){
  ${state.error?`<div class="notice error"><strong>Error:</strong> ${esc(state.error)}</div>`:''}
  ${state.mfaUnavailable&&!Object.keys(state.data.userAuthMethods||{}).length?`<div class="notice info"><strong>MFA report unavailable:</strong> ${esc(state.mfaMessage)}</div>`:''}
  ${state.warnings.map(w=>`<div class="notice warn"><strong>Partial data:</strong> ${esc(w)}</div>`).join('')}
- <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('privileged','Privileged Access')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('topology','Azure Topology')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('setup','Setup')}</nav>
+ <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('privileged','Privileged Access')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('interview','Interview Mastery')}${nav('topology','Azure Topology')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('setup','Setup')}</nav>
  ${renderTab()}
  <footer class="footer"><span>Read-only governance utility • no secrets required in source</span><span>${state.loadedAt?'Snapshot: '+esc(state.loadedAt.toLocaleString()):'No tenant snapshot loaded yet'}</span></footer>
  </main>`;wire();
 }
 function renderTab(){
  if(state.tab==='setup')return renderSetup();
+ if(state.tab==='interview')return renderInterview(state,{esc,badge,toolbar});
  if(!configured())return '<div class="card empty">Configure your Entra application first in the <strong>Setup</strong> tab.</div>';
  if(!state.account)return '<div class="card empty">Sign in with the Entra account you want to use for the read-only review.</div>';
  if(!state.loadedAt&&!state.loading)return '<div class="card empty">Signed in successfully. Select <strong>Refresh tenant data</strong> to build the first governance snapshot.</div>';
