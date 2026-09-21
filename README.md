@@ -22,6 +22,7 @@ The dashboard is deployed from this repository through GitHub Actions to Azure S
 - Syncs each tenant group with its direct user members in an expandable **Groups & Members** view.
 - Reviews MFA-capable, MFA-registered, and passwordless-capable users.
 - Enumerates active Entra directory roles and their members.
+- Adds a **Recent Activity** view that always shows Entra directory audit events and automatically adds tenant sign-in events when Microsoft Entra ID P1/P2 makes Graph sign-in telemetry available.
 - Adds a **Privileged Access** view showing users with active or eligible Entra privileged roles, role names, scope, assignment type, and start/end timestamps when Microsoft Graph exposes them.
 - Inventories Azure RBAC role assignments at subscription and resource scopes.
 - Adds a live **Azure Topology** view that inventories subscription resources and visualizes VNet → subnet → NIC → VM relationships with Public IP and NSG context.
