@@ -76,7 +76,7 @@ function vnetAddresses(vnet){
 function subnetAddresses(subnet){
  return [subnet?.properties?.addressPrefix,...(subnet?.properties?.addressPrefixes||[])].filter(Boolean).join(', ')||'CIDR not exposed';
 }
-function topologyNicRows(subnetId){
+function topologyNicRows(state,subnetId){
  const key=String(subnetId||'').toLowerCase(),rows=[];
  for(const nic of state.data.networkInterfaces||[]){
   for(const cfg of nic.properties?.ipConfigurations||[]){
@@ -96,7 +96,7 @@ export function renderTopology(state,{esc,badge,toolbar}){
  const vnets=[...(state.data.virtualNetworks||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
  const visibleVnets=vnets.filter(v=>{
   const subnets=v.properties?.subnets||[];
-  const nicText=subnets.flatMap(s=>topologyNicRows(s.id)).map(x=>`${x.nic?.name||''} ${x.vm?.name||''} ${x.pip?.name||''} ${x.nsg?.name||''}`).join(' ');
+  const nicText=subnets.flatMap(s=>topologyNicRows(state,s.id)).map(x=>`${x.nic?.name||''} ${x.vm?.name||''} ${x.pip?.name||''} ${x.nsg?.name||''}`).join(' ');
   return !q||`${v.name||''} ${v.location||''} ${resourceGroupName(v.id)} ${subnets.map(s=>s.name).join(' ')} ${nicText}`.toLowerCase().includes(q);
  });
  const byGroup=new Map();
@@ -111,14 +111,14 @@ export function renderTopology(state,{esc,badge,toolbar}){
    const subnets=vnet.properties?.subnets||[];
    return `<article class="card vnet-panel"><div class="vnet-header"><div class="vnet-title">${azureResourceIcon(vnet.type)}<div><div class="resource-kicker">Virtual network</div><h3>${esc(vnet.name)}</h3><div class="muted small">${esc(resourceGroupName(vnet.id))} • ${esc(vnet.location||'location unavailable')}</div></div></div><div class="vnet-address">${esc(vnetAddresses(vnet))}</div></div>
     <div class="vnet-boundary"><div class="vnet-boundary-label">VNet boundary</div><div class="subnet-grid">${subnets.map(subnet=>{
-     const rows=topologyNicRows(subnet.id),subnetNsg=resourceById(state.data.networkSecurityGroups,subnet.properties?.networkSecurityGroup?.id);
+     const rows=topologyNicRows(state,subnet.id),subnetNsg=resourceById(state.data.networkSecurityGroups,subnet.properties?.networkSecurityGroup?.id);
      return `<section class="subnet-zone"><div class="subnet-header"><div><span class="resource-kicker">Subnet</span><strong>${esc(subnet.name||'Unnamed subnet')}</strong><span class="muted small">${esc(subnetAddresses(subnet))}</span></div>${subnetNsg?`<span class="nsg-chip">${azureResourceIcon(subnetNsg.type)}${esc(subnetNsg.name)}</span>`:''}</div>
       <div class="subnet-flows">${rows.length?rows.map(({nic,cfg,vm,pip,nsg})=>`<div class="network-flow">
        ${pip?renderTopologyNode(pip.type,pip.name,publicIpValue(pip),'',esc):`<div class="topology-placeholder"><span class="placeholder-dot"></span><span>Private only</span></div>`}
        <span class="flow-arrow" aria-hidden="true">→</span>
        ${renderTopologyNode(nic.type,nic.name,cfg.properties?.privateIPAddress||'Private IP unavailable',nsg?`<span class="node-tag">NSG: ${esc(nsg.name)}</span>`:'',esc)}
        <span class="flow-arrow" aria-hidden="true">→</span>
-       ${vm?renderTopologyNode(vm.type,vm.name,vm.location||'Virtual machine','',esc):`<div class="topology-placeholder unattached"><span class="placehlder-dot"></span><span>NIC not attached to a VM</span></div>`}
+       ${vm?renderTopologyNode(vm.type,vm.name,vm.location||'Virtual machine','',esc):`<div class="topology-placeholder unattached"><span class="placeholder-dot"></span><span>NIC not attached to a VM</span></div>`}
       </div>`).join(''):'<div class="subnet-empty">No network interfaces are currently attached to this subnet.</div>'}</div>
      </section>`;
     }).join('')||'<div class="subnet-empty">No subnets were returned for this VNet.</div>'}</div></div>
