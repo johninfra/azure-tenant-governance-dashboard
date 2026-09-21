@@ -24,6 +24,7 @@ The dashboard is deployed from this repository through GitHub Actions to Azure S
 - Enumerates active Entra directory roles and their members.
 - Adds a **Privileged Access** view showing users with active or eligible Entra privileged roles, role names, scope, assignment type, and start/end timestamps when Microsoft Graph exposes them.
 - Inventories Azure RBAC role assignments at subscription and resource scopes.
+- Adds a live **Azure Topology** view that inventories subscription resources and visualizes VNet → subnet → NIC → VM relationships with Public IP and NSG context.
 - Flags broad Owner, Contributor, and User Access Administrator assignments.
 - Flags privileged Entra identities that are not reported as MFA-capable.
 - Flags guest identities with broad Azure access.
