@@ -6,7 +6,7 @@ const GRAPH_SCOPES=['User.Read','Directory.Read.All','RoleManagement.Read.Direct
 const ARM_SCOPES=['https://management.azure.com/user_impersonation'];
 const KEY='azureTenantGovernanceConfig.v1';
 
-const state={config:loadConfig(),msal:null,account:null,tab:'overview',loading:false,error:'',warnings:[],mfaUnavailable:false,mfaMessage:'',authMethodsUnavailable:false,authMethodsMessage:'',authPolicyUnavailable:false,authPolicyMessage:'',signInsUnavailable:false,signInsMessage:'',directoryAuditsUnavailable:false,directoryAuditsMessage:'',loadedAt:null,search:'',data:{users:[],groups:[],groupMemberships:{},servicePrincipals:[],mfa:[],userAuthMethods:{},authMethodsPolicy:null,directoryRoles:[],directoryRoleDefinitions:[],privilegedRoleAssignments:[],privilegedRoleEligibilities:[],signIns:[],directoryAudits:[],azureRoleAssignments:[],azureRoleDefinitions:[],resourceGroups:[],azureResources:[],virtualNetworks:[],networkInterfaces:[],publicIpAddresses:[],networkSecurityGroups:[],findings:[]}};
+const state={config:loadConfig(),msal:null,account:null,tab:'overview',loading:false,error:'',warnings:[],mfaUnavailable:false,mfaMessage:'',authMethodsUnavailable:false,authMethodsMessage:'',authPolicyUnavailable:false,authPolicyMessage:'',signInsUnavailable:false,signInsMessage:'',directoryAuditsUnavailable:false,directoryAuditsMessage:'',loadedAt:null,search:'',data:{users:[],groups:[],groupMemberships:{},servicePrincipals:[],mfa:[],userAuthMethods:{},authMethodsPolicy:null,directoryRoles:[],directoryRoleDefinitions:[],privilegedRoleAssignments:[],privilegedRoleEligibilities:[],signIns:[],directoryAudits:[],azureRoleAssignments:[],azureRoleDefinitions:[],subscription:null,resourceGroups:[],azureResources:[],virtualNetworks:[],networkInterfaces:[],publicIpAddresses:[],networkSecurityGroups:[],findings:[]}};
 const app=document.querySelector('#app');
 
 function loadConfig(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return{}}}
@@ -59,7 +59,7 @@ async function mapLimit(items,limit,worker){
  await Promise.all(Array.from({length:Math.min(limit,items.length)},run));
  return out;
 }
-function resetData(){state.data={users:[],groups:[],groupMemberships:{},servicePrincipals:[],mfa:[],userAuthMethods:{},authMethodsPolicy:null,directoryRoles:[],directoryRoleDefinitions:[],privilegedRoleAssignments:[],privilegedRoleEligibilities:[],signIns:[],directoryAudits:[],azureRoleAssignments:[],azureRoleDefinitions:[],resourceGroups:[],azureResources:[],virtualNetworks:[],networkInterfaces:[],publicIpAddresses:[],networkSecurityGroups:[],findings:[]};state.loadedAt=null;state.warnings=[];state.mfaUnavailable=false;state.mfaMessage='';state.authMethodsUnavailable=false;state.authMethodsMessage='';state.authPolicyUnavailable=false;state.authPolicyMessage='';state.signInsUnavailable=false;state.signInsMessage='';state.directoryAuditsUnavailable=false;state.directoryAuditsMessage=''}
+function resetData(){state.data={users:[],groups:[],groupMemberships:{},servicePrincipals:[],mfa:[],userAuthMethods:{},authMethodsPolicy:null,directoryRoles:[],directoryRoleDefinitions:[],privilegedRoleAssignments:[],privilegedRoleEligibilities:[],signIns:[],directoryAudits:[],azureRoleAssignments:[],azureRoleDefinitions:[],subscription:null,resourceGroups:[],azureResources:[],virtualNetworks:[],networkInterfaces:[],publicIpAddresses:[],networkSecurityGroups:[],findings:[]};state.loadedAt=null;state.warnings=[];state.mfaUnavailable=false;state.mfaMessage='';state.authMethodsUnavailable=false;state.authMethodsMessage='';state.authPolicyUnavailable=false;state.authPolicyMessage='';state.signInsUnavailable=false;state.signInsMessage='';state.directoryAuditsUnavailable=false;state.directoryAuditsMessage=''}
 
 async function loadTenantData(){
  if(!state.account)return signIn();
@@ -169,7 +169,7 @@ async function loadTenantData(){
   if(guid(state.config.subscriptionId||'')){
    try{
     const at=await acquire(ARM_SCOPES), sub=state.config.subscriptionId.trim(), arm=`https://management.azure.com/subscriptions/${sub}`;
-    const [assignments,definitions,resourceGroups,azureResources,virtualNetworks,networkInterfaces,publicIpAddresses,networkSecurityGroups]=await Promise.all([
+    const [assignments,definitions,resourceGroups,azureResources,virtualNetworks,networkInterfaces,publicIpAddresses,networkSecurityGroups,subscription]=await Promise.all([
      paged(`${arm}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01`,at),
      paged(`${arm}/providers/Microsoft.Authorization/roleDefinitions?api-version=2022-04-01`,at),
      paged(`${arm}/resourcegroups?api-version=2021-04-01`,at),
@@ -177,9 +177,10 @@ async function loadTenantData(){
      paged(`${arm}/providers/Microsoft.Network/virtualNetworks?api-version=2023-09-01`,at),
      paged(`${arm}/providers/Microsoft.Network/networkInterfaces?api-version=2023-09-01`,at),
      paged(`${arm}/providers/Microsoft.Network/publicIPAddresses?api-version=2023-09-01`,at),
-     paged(`${arm}/providers/Microsoft.Network/networkSecurityGroups?api-version=2023-09-01`,at)
+     paged(`${arm}/providers/Microsoft.Network/networkSecurityGroups?api-version=2023-09-01`,at),
+     api(`${arm}?api-version=2022-12-01`,at).catch(()=>null)
     ]);
-    Object.assign(state.data,{azureRoleAssignments:assignments,azureRoleDefinitions:definitions,resourceGroups,azureResources,virtualNetworks,networkInterfaces,publicIpAddresses,networkSecurityGroups});
+    Object.assign(state.data,{azureRoleAssignments:assignments,azureRoleDefinitions:definitions,resourceGroups,azureResources,virtualNetworks,networkInterfaces,publicIpAddresses,networkSecurityGroups,subscription});
    }catch(e){state.warnings.push('Azure Resource Manager data unavailable: '+norm(e))}
   }else state.warnings.push('No Subscription ID configured, so Azure RBAC inventory was skipped.');
   enrichAssignments();enrichPrivilegedRoles();state.data.findings=buildFindings();state.loadedAt=new Date();

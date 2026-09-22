@@ -4,6 +4,7 @@ function azureResourceLabel(type=''){
  const t=String(type||'').toLowerCase();
  const labels={
   'microsoft.compute/virtualmachines':'Virtual machine',
+  'microsoft.compute/disks':'Managed disk',
   'microsoft.network/virtualnetworks':'Virtual network',
   'microsoft.network/networkinterfaces':'Network interface',
   'microsoft.network/publicipaddresses':'Public IP',
@@ -24,6 +25,9 @@ function azureResourceLabel(type=''){
 }
 function azureResourceKind(type=''){
  const t=String(type||'').toLowerCase();
+ if(t.includes('/disks'))return 'storage';
+ if(t.includes('activitylogalerts'))return 'alert';
+ if(t.includes('actiongroups'))return 'people';
  if(t.includes('virtualmachines'))return 'vm';
  if(t.includes('virtualnetworks'))return 'vnet';
  if(t.includes('networkinterfaces'))return 'nic';
@@ -42,6 +46,8 @@ function azureResourceKind(type=''){
 function azureResourceIcon(type=''){
  const kind=azureResourceKind(type);
  const icons={
+  alert:'<svg viewBox="0 0 24 24"><path d="M5 17h14l-2-3V9a5 5 0 00-10 0v5zM10 21h4M12 2v2"/></svg>',
+  people:'<svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M5 21v-4a7 7 0 0114 0v4zM3 7v5M21 7v5"/></svg>',
   vm:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
   vnet:'<svg viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="17" r="2.5"/><path d="M8.2 8.2l2.5 6.3M15.8 8.2l-2.5 6.3M8.5 7h7"/></svg>',
   nic:'<svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="10" rx="2"/><path d="M8 17v3M12 17v3M16 17v3M8 10h8"/></svg>',
@@ -86,46 +92,53 @@ function topologyNicRows(state,subnetId){
  }
  return rows;
 }
-function renderTopologyNode(type,name,meta='',extra='',esc){
- return `<div class="topology-node">${azureResourceIcon(type)}<div class="topology-node-copy"><strong>${esc(name||'Unnamed resource')}</strong><span>${esc(meta||azureResourceLabel(type))}</span>${extra}</div></div>`;
-}
 export function renderTopology(state,{esc,badge,toolbar}){
- const q=state.search.toLowerCase();
- const resources=[...(state.data.azureResources||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
- const visibleResources=resources.filter(r=>!q||`${r.name||''} ${r.type||''} ${r.location||''} ${resourceGroupName(r.id)}`.toLowerCase().includes(q));
- const vnets=[...(state.data.virtualNetworks||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
- const visibleVnets=vnets.filter(v=>{
-  const subnets=v.properties?.subnets||[];
-  const nicText=subnets.flatMap(s=>topologyNicRows(state,s.id)).map(x=>`${x.nic?.name||''} ${x.vm?.name||''} ${x.pip?.name||''} ${x.nsg?.name||''}`).join(' ');
-  return !q||`${v.name||''} ${v.location||''} ${resourceGroupName(v.id)} ${subnets.map(s=>s.name).join(' ')} ${nicText}`.toLowerCase().includes(q);
- });
- const byGroup=new Map();
- for(const r of visibleResources){const rg=resourceGroupName(r.id);if(!byGroup.has(rg))byGroup.set(rg,[]);byGroup.get(rg).push(r)}
- const networkCount=(state.data.virtualNetworks||[]).length+(state.data.networkInterfaces||[]).length+(state.data.publicIpAddresses||[]).length+(state.data.networkSecurityGroups||[]).length;
- return `<section class="topology-page">
-  <div class="card topology-intro"><div class="section-title"><div><h2>Azure resource & network topology</h2><div class="muted small">Live Azure Resource Manager inventory organized by VNet, subnet, NIC, VM, Public IP, and NSG relationships.</div></div><div class="topology-counts">${badge(`${resources.length} resources`,'good')}${badge(`${networkCount} network objects`,'neutral')}</div></div>
-   ${toolbar('Search resource, resource group, VNet, subnet, VM, NIC, or IP…')}
-   <div class="topology-legend"><span>${azureResourceIcon('Microsoft.Network/virtualNetworks')}Virtual network</span><span>${azureResourceIcon('Microsoft.Compute/virtualMachines')}VM</span><span>${azureResourceIcon('Microsoft.Network/networkInterfaces')}NIC</span><span>${azureResourceIcon('Microsoft.Network/publicIPAddresses')}Public IP</span><span>${azureResourceIcon('Microsoft.Network/networkSecurityGroups')}NSG</span></div>
-  </div>
-  <div class="topology-network-stack">${visibleVnets.map(vnet=>{
-   const subnets=vnet.properties?.subnets||[];
-   return `<article class="card vnet-panel"><div class="vnet-header"><div class="vnet-title">${azureResourceIcon(vnet.type)}<div><div class="resource-kicker">Virtual network</div><h3>${esc(vnet.name)}</h3><div class="muted small">${esc(resourceGroupName(vnet.id))} • ${esc(vnet.location||'location unavailable')}</div></div></div><div class="vnet-address">${esc(vnetAddresses(vnet))}</div></div>
-    <div class="vnet-boundary"><div class="vnet-boundary-label">VNet boundary</div><div class="subnet-grid">${subnets.map(subnet=>{
-     const rows=topologyNicRows(state,subnet.id),subnetNsg=resourceById(state.data.networkSecurityGroups,subnet.properties?.networkSecurityGroup?.id);
-     return `<section class="subnet-zone"><div class="subnet-header"><div><span class="resource-kicker">Subnet</span><strong>${esc(subnet.name||'Unnamed subnet')}</strong><span class="muted small">${esc(subnetAddresses(subnet))}</span></div>${subnetNsg?`<span class="nsg-chip">${azureResourceIcon(subnetNsg.type)}${esc(subnetNsg.name)}</span>`:''}</div>
-      <div class="subnet-flows">${rows.length?rows.map(({nic,cfg,vm,pip,nsg})=>`<div class="network-flow">
-       ${pip?renderTopologyNode(pip.type,pip.name,publicIpValue(pip),'',esc):`<div class="topology-placeholder"><span class="placeholder-dot"></span><span>Private only</span></div>`}
-       <span class="flow-arrow" aria-hidden="true">→</span>
-       ${renderTopologyNode(nic.type,nic.name,cfg.properties?.privateIPAddress||'Private IP unavailable',nsg?`<span class="node-tag">NSG: ${esc(nsg.name)}</span>`:'',esc)}
-       <span class="flow-arrow" aria-hidden="true">→</span>
-       ${vm?renderTopologyNode(vm.type,vm.name,vm.location||'Virtual machine','',esc):`<div class="topology-placeholder unattached"><span class="placeholder-dot"></span><span>NIC not attached to a VM</span></div>`}
-      </div>`).join(''):'<div class="subnet-empty">No network interfaces are currently attached to this subnet.</div>'}</div>
-     </section>`;
-    }).join('')||'<div class="subnet-empty">No subnets were returned for this VNet.</div>'}</div></div>
-   </article>`;
-  }).join('')||'<div class="card empty">No virtual networks match the current filter, or no VNet data was returned.</div>'}</div>
-  <div class="card resource-inventory"><div class="section-title"><div><h2>Subscription resource inventory</h2><div class="muted small">All resources returned by Azure Resource Manager, grouped by resource group.</div></div><span class="muted small">${visibleResources.length}/${resources.length} shown</span></div>
-   <div class="resource-group-stack">${[...byGroup.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([rg,items])=>`<section class="resource-group-panel"><div class="resource-group-heading"><strong>${esc(rg)}</strong><span>${items.length} resource${items.length===1?' ':'s'}</span></div><div class="resource-grid">${items.map(r=>`<div class="resource-tile">${azureResourceIcon(r.type)}<div><strong>${esc(r.name)}</strong><span>${esc(azureResourceLabel(r.type))}</span><small>${esc(r.location||'global')}</small></div></div>`).join('')}</div></section>`).join('')||'<div class="empty">No resources match the current filter.</div>'}</div>
-  </div>
- </section>`;
+ const data=state.data,q=(state.search||'').trim().toLowerCase();
+ const resources=[...(data.azureResources||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+ const type=r=>String(r.type||'').toLowerCase();
+ const same=(a,b)=>String(a||'').toLowerCase()===String(b||'').toLowerCase();
+ const nameFromId=id=>String(id||'').split('/').pop();
+ const node=(r,meta)=>`<div class="map-node">${azureResourceIcon(r.type)}<div><strong>${esc(r.name||nameFromId(r.id)||'Unnamed resource')}</strong><span>${esc(meta||azureResourceLabel(r.type))}</span></div></div>`;
+ const empty=text=>`<p class="map-empty">${esc(text)}</p>`;
+ const link=label=>`<div class="map-link"><span>${esc(label)}</span><i></i></div>`;
+ const groups=new Map();
+ for(const rg of data.resourceGroups||[])groups.set(rg.name.toLowerCase(),{...rg,items:[]});
+ for(const r of resources){const name=resourceGroupName(r.id),key=name.toLowerCase();if(!groups.has(key))groups.set(key,{name,items:[]});groups.get(key).items.push(r)}
+ const shown=[...groups.values()].filter(g=>!q||JSON.stringify([g.name,g.items,(data.virtualNetworks||[]).filter(v=>same(resourceGroupName(v.id),g.name)),(data.networkInterfaces||[]).filter(n=>same(resourceGroupName(n.id),g.name))]).toLowerCase().includes(q));
+ shown.sort((a,b)=>b.items.length-a.items.length||a.name.localeCompare(b.name));
+ function network(g){
+  const vnets=(data.virtualNetworks||[]).filter(v=>same(resourceGroupName(v.id),g.name));
+  const used=new Set();
+  const html=vnets.map(v=>`<section class="map-vnet">${node(v,`Virtual network • ${vnetAddresses(v)}`)}<div class="map-subnets">${(v.properties?.subnets||[]).map(s=>{
+   const id=s.properties?.networkSecurityGroup?.id,nsg=resourceById(data.networkSecurityGroups,id);
+   if(id)used.add(id.toLowerCase());
+   return `<div class="map-association">${node({name:s.name,type:'Microsoft.Network/virtualNetworks'},subnetAddresses(s))}${id?`${link('Subnet association')}${node(nsg||{id,type:'Microsoft.Network/networkSecurityGroups'},nsg?'Network security group':'Referenced NSG • details unavailable')}`:empty('No subnet NSG association returned')}</div>`;
+  }).join('')||empty('No subnet data returned')}</div></section>`).join('');
+  const others=g.items.filter(r=>type(r).startsWith('microsoft.network/')&&!['microsoft.network/virtualnetworks','microsoft.network/networkinterfaces','microsoft.network/publicipaddresses'].includes(type(r))&&!used.has((r.id||'').toLowerCase()));
+  return html+others.map(r=>node(r)).join('')||empty('No network resources returned');
+ }
+ function compute(g){
+  const tracked=new Set(),flows=[];
+  const mark=r=>{if(r?.id)tracked.add(r.id.toLowerCase());return r};
+  for(const nic of (data.networkInterfaces||[]).filter(n=>same(resourceGroupName(n.id),g.name))){
+   for(const cfg of nic.properties?.ipConfigurations||[]){
+    const pip=resourceById(data.publicIpAddresses,cfg.properties?.publicIPAddress?.id),vm=resourceById(resources,nic.properties?.virtualMachine?.id);
+    mark(nic);mark(pip);mark(vm);
+    const subnetId=cfg.properties?.subnet?.id;
+    flows.push(`<div class="map-compute-flow">${pip?node(pip,publicIpValue(pip))+link('IP configuration'):''}${node(nic,cfg.properties?.privateIPAddress||'Network interface')}${vm?link('Attached VM')+node(vm):''}</div><p class="map-caption">${subnetId?`Subnet: ${esc(nameFromId(subnetId))} • VNet: ${esc(String(subnetId).split('/subnets/')[0].split('/').pop())}`:'Subnet association unavailable'}${nic.properties?.networkSecurityGroup?.id?` • NIC NSG: ${esc(nameFromId(nic.properties.networkSecurityGroup.id))}`:''}</p>`);
+   }
+  }
+  const remaining=g.items.filter(r=>(type(r).startsWith('microsoft.compute/')||['microsoft.network/networkinterfaces','microsoft.network/publicipaddresses'].includes(type(r)))&&!tracked.has((r.id||'').toLowerCase()));
+  return flows.join('')+remaining.map(r=>node(r,type(r)==='microsoft.compute/disks'?'Managed disk • attachment not verified':undefined)).join('')||empty('No compute resources returned');
+ }
+ const category=(title,html,cls='')=>`<section class="map-category ${cls}"><h3>${title}</h3>${html}</section>`;
+ function group(g){
+  const subnets=(data.virtualNetworks||[]).filter(v=>same(resourceGroupName(v.id),g.name)).reduce((n,v)=>n+(v.properties?.subnets||[]).length,0);
+  const web=g.items.filter(r=>type(r).startsWith('microsoft.web/'));
+  const monitor=g.items.filter(r=>type(r).startsWith('microsoft.insights/'));
+  const other=g.items.filter(r=>!['microsoft.network/','microsoft.compute/','microsoft.web/','microsoft.insights/'].some(t=>type(r).startsWith(t)));
+  const full=g.items.some(r=>['microsoft.compute/','microsoft.web/','microsoft.network/virtualnetworks'].some(t=>type(r).startsWith(t)));
+  return `<article class="map-group ${full?'':'map-group-compact'}"><header class="map-group-header">${node({name:g.name,type:'resource'},`Resource group${g.location?' • '+g.location:''}`)}<div class="topology-counts">${badge(`${g.items.length} resources`)}${subnets?badge(`${subnets} subnets`):''}</div></header>${full?`<div class="map-grid"><div class="map-column">${category('Networking',network(g))}${category('Compute & attached resources',compute(g))}</div><div class="map-column">${category(web.some(r=>type(r)==='microsoft.web/sites')?'Web Apps':'Static Web Apps',web.map(r=>node(r)).join('')||empty('No web apps returned'))}${category('Monitoring',monitor.map(r=>node(r)).join('')||empty('No monitoring resources returned'))}</div>${other.length?category('Other resources',other.map(r=>node(r)).join(''),'map-other'):''}</div>`:`<div class="map-compact-items">${g.items.map(r=>node(r)).join('')||empty('No resources returned')}</div>`}</article>`;
+ }
+ return `<section class="topology-page"><div class="card topology-intro"><div class="section-title"><div><h2>Azure resource & network topology</h2><p class="muted small">Live resource inventory and confirmed network associations.</p></div>${badge(`${resources.length} resources`,'good')}</div>${toolbar('Search resource, resource group, subnet, NSG, or IP…')}</div><div class="map-canvas"><header class="map-title"><h2>Azure resource map</h2><p>Subscription → resource groups → resources</p></header><section class="map-subscription"><header class="map-subscription-header">${azureResourceIcon('Microsoft.KeyVault/vaults')}<div><h3>${esc(data.subscription?.displayName||state.config.subscriptionName||'Azure subscription')}</h3><span>${esc(state.config.subscriptionId||'No subscription configured')}</span></div></header><div class="map-groups">${shown.map(group).join('')||empty(q?'No resources match your search.':'Connect and refresh tenant data to view the resource map.')}</div></section><footer class="map-footnote"><span><i></i> Solid lines: relationships returned by Azure</span><span>Unverified attachments are labeled; resource counts follow live inventory.</span></footer></div></section>`;
 }
