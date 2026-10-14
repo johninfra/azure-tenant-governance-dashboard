@@ -1,0 +1,13 @@
+name: Actions Health Check
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm runner startup
+        run: echo "GitHub Actions runner started successfully"
