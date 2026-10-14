@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+src/main.multitenant.js
 .DS_Store
 *.log
 .vscode/
