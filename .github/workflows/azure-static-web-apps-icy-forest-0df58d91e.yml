@@ -4,46 +4,45 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches:
-      - main
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+    env:
+      VITE_ENTRA_CLIENT_ID: a1ddc620-0b4e-4295-ad82-2714fd5270bd
+      SWA_DEPLOYMENT_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ICY_FOREST_0DF58D91E }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: true
-          lfs: false
-      - name: Build And Deploy
-        id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
-        env:
-          # Public Entra application identifier; not a client secret.
-          VITE_ENTRA_CLIENT_ID: a1ddc620-0b4e-4295-ad82-2714fd5270bd
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ICY_FOREST_0DF58D91E }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
-          action: "upload"
-          ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
-          # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "/" # App source code path
-          api_location: "" # Api source code path - optional
-          output_location: "dist" # Built app content directory - optional
-          ###### End of Repository/Build Configurations ######
+      - name: Checkout repository without reusable actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
 
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ICY_FOREST_0DF58D91E }}
-          action: "close"
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install
+
+      - name: Build multitenant dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+
+      - name: Deploy to Azure Static Web Apps
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SWA_DEPLOYMENT_TOKEN:-}" ]; then
+            echo "Azure Static Web Apps deployment token is not configured." >&2
+            exit 1
+          fi
+          npx --yes @azure/static-web-apps-cli@latest deploy ./dist \
+            --deployment-token "${SWA_DEPLOYMENT_TOKEN}" \
+            --env production
