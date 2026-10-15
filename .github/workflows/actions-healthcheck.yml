@@ -1,15 +1,11 @@
 name: Actions Health Check
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   healthcheck:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
       - name: Confirm runner startup
-        run: echo "GitHub Actions runner and checkout action started successfully"
+        run: echo "GitHub Actions runner started successfully"
