@@ -41,7 +41,7 @@ replaceOnce(
   `function directoryScope(v){return !v||v==='/'?'Tenant-wide':v}
 function daysSince(v){if(!v)return Infinity;const t=new Date(v).getTime();return Number.isFinite(t)?(Date.now()-t)/86400000:Infinity}
 function lastSuccessfulSignIn(user={}){return user.signInActivity?.lastSuccessfulSignInDateTime||null}
-function activityAgeLabel(user={}){const last=lastSuccessfulSignIn(user);if(last)return \`last successful sign-in \${Math.floor(daysSince(last))} days ago\`;if(user.createdDateTime)return \`no successful sign-in exposed; account created \${Math.floor(daysSince(user.createdDateTime))} days ago\`;return 'no reliable activity timestamp exposed'}
+function activityAgeLabel(user={}){const last=lastSuccessfulSignIn(user);if(last)return 'last successful sign-in '+Math.floor(daysSince(last))+' days ago';if(user.createdDateTime)return 'no successful sign-in exposed; account created '+Math.floor(daysSince(user.createdDateTime))+' days ago';return 'no reliable activity timestamp exposed'}
 function buildFindings(){`
 );
 
@@ -55,7 +55,7 @@ replaceOnce(
   const groupOwners=owners[g.id];
   const governedType=g.securityEnabled||(g.groupTypes||[]).includes('Unified');
   if(governedType&&Array.isArray(groupOwners)&&groupOwners.length===0){
-   add('medium','Ownerless group',\`${g.displayName||'Unnamed group'} has no owner returned by Microsoft Graph. Assign accountable ownership so membership and access changes have a clear reviewer.\`,g.displayName||g.id,\`ownerless-group:\${g.id}\`);
+   add('medium','Ownerless group',(g.displayName||'Unnamed group')+' has no owner returned by Microsoft Graph. Assign accountable ownership so membership and access changes have a clear reviewer.',g.displayName||g.id,'ownerless-group:'+g.id);
   }
  }
  if(state.data.userSignInActivityLoaded){
@@ -75,13 +75,13 @@ replaceOnce(
    if(!stale)continue;
    const roleNames=[...new Set(assignments.map(a=>a._roleName||'Privileged role'))];
    const severity=roleNames.some(r=>highPriv.test(r))?'high':'medium';
-   add(severity,'Stale privileged account',\`${user.displayName||user.userPrincipalName||id} has active privileged access (\${roleNames.join(', ')}) and \${activityAgeLabel(user)}. Review whether the account still needs standing privilege or should be disabled/reduced.\`,user.userPrincipalName||user.displayName||id,\`stale-admin:\${id}\`);
+   add(severity,'Stale privileged account',(user.displayName||user.userPrincipalName||id)+' has active privileged access ('+roleNames.join(', ')+') and '+activityAgeLabel(user)+'. Review whether the account still needs standing privilege or should be disabled/reduced.',user.userPrincipalName||user.displayName||id,'stale-admin:'+id);
   }
   for(const user of state.data.users.filter(u=>u.userType==='Guest'&&u.accountEnabled!==false)){
    const last=lastSuccessfulSignIn(user),created=user.createdDateTime;
    const dormant=(last&&daysSince(last)>=90)||(!last&&created&&daysSince(created)>=90);
    if(!dormant)continue;
-   add('medium','Dormant guest account',\`${user.displayName||user.userPrincipalName||user.id} is an enabled guest with \${activityAgeLabel(user)}. Confirm the external relationship is still valid and remove access that is no longer required.\`,user.userPrincipalName||user.displayName||user.id,\`dormant-guest:\${user.id}\`);
+   add('medium','Dormant guest account',(user.displayName||user.userPrincipalName||user.id)+' is an enabled guest with '+activityAgeLabel(user)+'. Confirm the external relationship is still valid and remove access that is no longer required.',user.userPrincipalName||user.displayName||user.id,'dormant-guest:'+user.id);
   }
  }`
 );
