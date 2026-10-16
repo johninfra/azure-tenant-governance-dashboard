@@ -26,7 +26,7 @@ replaceOnce(
   }
   try{
    const ownerPairs=await mapLimit(groups,6,async group=>{
-    try{return [group.id,await paged(\`${base}/groups/\${group.id}/owners?$select=id,displayName,userPrincipalName\`,gt)]}
+    try{return [group.id,await paged(base+'/groups/'+group.id+'/owners?$select=id,displayName,userPrincipalName',gt)]}
     catch{return [group.id,null]}
    });
    state.data.groupOwners=Object.fromEntries(ownerPairs.filter(([,owners])=>Array.isArray(owners)));
