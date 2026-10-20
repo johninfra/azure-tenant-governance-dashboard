@@ -130,7 +130,7 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
   });
   await Promise.all([
     collect('directoryRoleDefinitions', () => paged(`${GRAPH}/roleManagement/directory/roleDefinitions`, SCOPES.roles)),
-    collect('privilegedRoleAssignments', () => paged(`${GRAPH}/roleManagement/directory/roleAssignments?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId`, SCOPES.roles)),
+    collect('privilegedRoleAssignments', () => paged(`${GRAPH}/roleManagement/directory/roleAssignments?$select=id,principalId,roleDefinitionId,directoryScopeId`, SCOPES.roles)),
   ]);
   if (coverage.privilegedRoleAssignments.status !== 'available') {
     const known = new Set(data.privilegedRoleAssignments.map(a => a.principalId + '|' + a.roleDefinitionId));
