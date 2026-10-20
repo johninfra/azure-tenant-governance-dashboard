@@ -107,6 +107,14 @@ Relevant delegated permissions include:
 - `Directory.Read.All`
 - `RoleManagement.Read.Directory`
 - `AuditLog.Read.All`
+- `UserAuthenticationMethod.Read.All` for the optional detailed method inventory
+- `Policy.Read.AuthenticationMethod` for authentication-method policy
+- `Policy.Read.All` for Conditional Access policy inventory
+
+Permissions are acquired separately for each feature. Denied consent for an optional
+feature does not prevent directory or Azure inventory. No write permission has been
+added; the application still uses GET operations only. ARM `user_impersonation` is
+bounded by the signed-in user's Azure roles, so use a reader identity.
 
 Examples:
 
@@ -152,7 +160,7 @@ Knowing a Subscription ID does not provide access to that subscription.
 ## Local development
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -163,6 +171,44 @@ http://localhost:5173
 ```
 
 Local development may require the appropriate Entra client configuration and redirect URI for the environment being used.
+
+Use Node 22.12 or later. Copy `.env.example` to `.env` and replace its placeholder
+with your public SPA client ID. The source entry point is `src/main.js`; there is no
+generated JavaScript entry point or source-rewriting build step.
+
+Run automated local checks with:
+
+```bash
+npm run validate
+```
+
+This runs the Node regression tests and Vite production build. Test fixtures use
+synthetic accounts and mock API responses; they do not read or change a live tenant.
+
+## Assessment accuracy and limitations
+
+- A numeric review score is withheld unless all tracked evidence sources are available.
+  Unavailable licensing/permissions, incomplete collections and skipped Azure inventory
+  produce `Incomplete` in the UI and `null` in JSON. This includes missing PIM visibility.
+- Groups & Members remains a direct-user view. Privileged user counts, role views and
+  findings also include resolved group-based access, with the source group shown.
+  Azure nested membership follows Graph's transitive-members result. Entra role-assignable
+  groups do not support nesting, and latent PIM-for-Groups membership is not evaluated.
+- Successful Azure datasets remain visible if another Azure request fails. Failed or
+  hidden membership is labelled unknown rather than treated as an empty group.
+- MFA registration, reported capability and enforcement are distinct. Enforcement stays
+  **Unknown**; registered methods and enabled policies do not prove a sign-in requirement.
+- Missing successful-sign-in timestamps do not prove inactivity. Expired/unusable
+  Temporary Access Passes do not count as usable method registrations.
+- JSON exports include coverage and snapshot timestamps. CSV retains the four finding
+  columns and adds assessment metadata columns and an `assessment` record, even when
+  no findings exist. Directory values are escaped against spreadsheet formulas.
+- Read-only requests do not make an ARM token intrinsically read-only. Use an identity
+  with the least Azure access needed. The dashboard is not a complete custom-role,
+  deny-assignment or Conditional Access evaluation engine.
+
+See [architecture and trust boundaries](docs/ARCHITECTURE.md) for the coverage model,
+request/session isolation and remaining limitations.
 
 ## Production deployment
 
