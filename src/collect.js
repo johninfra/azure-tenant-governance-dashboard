@@ -76,7 +76,7 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
   }
   await Promise.all([
     collect('directoryAudits', () => sample(`${GRAPH}/auditLogs/directoryAudits?$top=100&$orderby=activityDateTime%20desc`)),
-    collect('signIns', () => sample(`${GRAPH}/auditLogs/signIns?$select=id,createdDateTime,userDisplayName,userPrincipalName,appDisplayName,ipAddress,status,conditionalAccessStatus,authenticationRequirement,location&$top=25&$orderby=createdDateTime%20desc`)),
+    collect('signIns', () => sample(`${GRAPH}/auditLogs/signIns?$top=25&$orderby=createdDateTime%20desc`)),
   ]);
   for (const [key, flag, detail] of [['directoryAudits', 'directoryAuditsUnavailable', 'directoryAuditsMessage'], ['signIns', 'signInsUnavailable', 'signInsMessage']]) {
     snapshot[flag] = coverage[key].status !== 'available'; snapshot[detail] = coverage[key].detail;
