@@ -5,6 +5,7 @@ import { emptySnapshot, assessment, DATASETS, accountKey } from './snapshot.js';
 import { createDashboardController } from './controller.js';
 import { renderMfaView, renderOverviewView } from './views.js';
 import { findingsCsv } from './export.js';
+import { assessFrameworks, frameworkExport, renderFrameworkAlignment } from './frameworks.js';
 import { privilegedRows as resolvedPrivilegedRows, privilegedUserIds, azureRows, usableMfaRegistration, policyHasMandatoryAuthControl } from './governance.js';
 
 const KEY='azureTenantGovernanceConfig.v1';
@@ -136,7 +137,7 @@ function render(){
  ${state.error?`<div class="notice error"><strong>Error:</strong> ${esc(state.error)}</div>`:''}
  ${state.mfaUnavailable&&!Object.keys(state.data.userAuthMethods||{}).length?`<div class="notice info"><strong>MFA report unavailable:</strong> ${esc(state.mfaMessage)}</div>`:''}
  ${state.warnings.map(w=>`<div class="notice warn"><strong>Partial data:</strong> ${esc(w)}</div>`).join('')}
- <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('privileged','Privileged Access')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('activity','Recent Activity')}${nav('conditionalAccess','Conditional Access')}${nav('topology','Azure Topology')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('setup','Setup')}</nav>
+ <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('privileged','Privileged Access')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('activity','Recent Activity')}${nav('conditionalAccess','Conditional Access')}${nav('topology','Azure Topology')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('frameworks','Framework Alignment')}${nav('setup','Setup')}</nav>
  ${renderCoverage()}
  ${renderTab()}
  <footer class="footer"><span>Read-only governance utility • no secrets required in source</span><span>${state.loadedAt?'Snapshot: '+esc(state.loadedAt.toLocaleString()):'No tenant snapshot loaded yet'}</span></footer>
@@ -148,7 +149,7 @@ function renderTab(){
  if(!state.account)return '<div class="card empty">Sign in with the Entra account you want to use for the read-only review.</div>';
  if(!state.loadedAt&&!state.loading)return '<div class="card empty">Signed in successfully. Select <strong>Refresh tenant data</strong> to build the first governance snapshot.</div>';
  if(state.loading&&!state.loadedAt)return '<div class="card empty">Querying Microsoft Graph and Azure Resource Manager…</div>';
- return ({groups:renderGroups,privileged:renderPrivileged,mfa:renderMfa,roles:renderRoles,activity:renderActivity,conditionalAccess:renderConditionalAccess,topology:()=>renderTopology(state,{esc,badge,toolbar}),rbac:renderRbac,findings:renderFindings}[state.tab]||renderOverview)();
+ return ({groups:renderGroups,privileged:renderPrivileged,mfa:renderMfa,roles:renderRoles,activity:renderActivity,conditionalAccess:renderConditionalAccess,topology:()=>renderTopology(state,{esc,badge,toolbar}),rbac:renderRbac,findings:renderFindings,frameworks:()=>renderFrameworkAlignment(state.data,state.coverage,{search:state.search,loadedAt:state.loadedAt})}[state.tab]||renderOverview)();
 }
 function renderOverview(){return renderOverviewView(state,{esc,badge,stat,pct,review:reviewAssessment(),privilegedCount:privilegedUsers().size,membershipCount:groupMembershipCount()})}
 function renderGroups(){
@@ -247,6 +248,7 @@ function wire(){
  document.querySelector('[data-search]')?.addEventListener('input',e=>{state.search=e.target.value;render();requestAnimationFrame(()=>{const s=document.querySelector('[data-search]');if(s){s.focus();s.setSelectionRange(s.value.length,s.value.length)}})});
  document.querySelector('[data-action="export-json"]')?.addEventListener('click',exportJson);
  document.querySelector('[data-action="export-csv"]')?.addEventListener('click',exportCsv);
+ document.querySelector('[data-action="export-frameworks"]')?.addEventListener('click',()=>download('azure-security-framework-alignment.json',JSON.stringify(frameworkExport(assessFrameworks(state.data,state.coverage),{tenantId:signedInTenantId()||null,snapshotAt:state.loadedAt?.toISOString()||null}),null,2),'application/json'));
 }
 function download(name,content,type){const b=new Blob([content],{type}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 function exportJson(){download('azure-governance-findings.json',JSON.stringify({generatedAt:new Date().toISOString(),snapshotAt:state.loadedAt?.toISOString()||null,assessment:reviewAssessment(),coverage:state.coverage,mfaEnforcement:'Unknown',tenantId:signedInTenantId()||null,subscriptionId:state.config.subscriptionId||null,summary:{users:state.data.users.length,groups:state.data.groups.length,mfaCapablePercent:mfaPct(),usersWithStrongRegisteredAuthMethod:usersWithStrongAuth().length,usersWithReadableAuthMethods:usersWithAuthData().length,effectivePrivilegedUsers:privilegedUsers().size,effectiveAzureUserAssignments:(state.data.effectiveAzureRoleAssignments||[]).length,entraRoleAssignments:roleMembers(),conditionalAccessPolicies:state.data.conditionalAccessPolicies.length,azureRbacAssignments:state.data.azureRoleAssignments.length,reviewScore:score()},findings:state.data.findings},null,2),'application/json')}
