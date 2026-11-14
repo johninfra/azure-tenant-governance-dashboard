@@ -48,7 +48,14 @@ export function createApiClient({ getToken, signal, check = () => {}, fetchImpl 
         check();
       } catch (error) {
         if (signal?.aborted) throw aborted();
-        if (controller.signal.aborted) throw new Error('The Microsoft API request timed out.');
+        if (controller.signal.aborted) {
+          if (attempt < maxRetries) {
+            await sleep(1000 * 2 ** attempt, signal);
+            check();
+            continue;
+          }
+          throw new Error(`The Microsoft API request timed out after ${attempt + 1} attempts.`);
+        }
         throw error;
       } finally {
         clearTimeout(timer);
