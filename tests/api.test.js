@@ -60,3 +60,32 @@ test('pagination never forwards bearer tokens to another origin or loops forever
     await assert.rejects(client.paged(graph, [])); assert.equal(calls, 1);
   }
 });
+
+test('transient request timeouts retry with bounded backoff', async () => {
+  const delays = []; let attempts = 0;
+  const client = createApiClient({ getToken: async () => 'token', timeoutMs: 5, maxRetries: 2,
+    sleep: async ms => delays.push(ms),
+    fetchImpl: async (_, { signal }) => {
+      attempts++;
+      if (attempts === 1) return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+      return response({ value: ['recovered'] });
+    } });
+  assert.deepEqual(await client.paged(graph, []), ['recovered']);
+  assert.equal(attempts, 2);
+  assert.deepEqual(delays, [1000]);
+});
+
+test('exhausted request timeouts remain errors instead of empty evidence', async () => {
+  let attempts = 0;
+  const client = createApiClient({ getToken: async () => 'token', timeoutMs: 5, maxRetries: 1,
+    sleep: async () => {}, fetchImpl: async (_, { signal }) => {
+      attempts++;
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+    } });
+  await assert.rejects(client.paged(graph, []), /timed out after 2 attempts/);
+  assert.equal(attempts, 2);
+});
