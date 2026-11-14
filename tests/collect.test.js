@@ -33,6 +33,9 @@ test('Graph queries respect page limits and advanced-query requirements for dire
   }
   assert.ok(authorizations.some(scopes => scopes.includes('Directory.Read.All') && scopes.includes('AuditLog.Read.All')));
   assert.deepEqual(SCOPES.directory, ['Directory.Read.All']);
+  const signIns = calls.find(call => call.url.pathname.endsWith('/auditLogs/signIns'));
+  assert.equal(signIns.url.searchParams.get('$filter'), 'createdDateTime ge 2026-10-13T12:00:00.000Z');
+  assert.equal(signIns.url.searchParams.get('$top'), '25');
 });
 
 test('a nested Azure group member returned only by transitive membership gets effective access', async () => {
