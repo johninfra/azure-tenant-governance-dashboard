@@ -76,7 +76,10 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
   }
   await Promise.all([
     collect('directoryAudits', () => sample(`${GRAPH}/auditLogs/directoryAudits?$top=100&$orderby=activityDateTime%20desc`)),
-    collect('signIns', () => sample(`${GRAPH}/auditLogs/signIns?$top=25&$orderby=createdDateTime%20desc`)),
+    collect('signIns', () => {
+      const since = new Date(now().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      return sample(`${GRAPH}/auditLogs/signIns?$filter=${encodeURIComponent(`createdDateTime ge ${since}`)}&$top=25&$orderby=createdDateTime%20desc`);
+    }),
   ]);
   for (const [key, flag, detail] of [['directoryAudits', 'directoryAuditsUnavailable', 'directoryAuditsMessage'], ['signIns', 'signInsUnavailable', 'signInsMessage']]) {
     snapshot[flag] = coverage[key].status !== 'available'; snapshot[detail] = coverage[key].detail;
