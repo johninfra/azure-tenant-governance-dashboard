@@ -37,3 +37,20 @@ test('replacement refresh ignores late results even for the same account', async
   pending[1].resolve(result('new')); await second; pending[0].resolve(result('old')); await first;
   assert.equal(state.data.users[0].id, 'new');
 });
+
+test('a stalled token or collector stops loading at the refresh deadline', async () => {
+  const pending = [];
+  const state = { ...emptySnapshot(), account: a, config: {}, msal: { setActiveAccount() {} } };
+  const controller = createDashboardController({
+    state, render() {}, makeClient: value => value, refreshTimeoutMs: 15,
+    collect: options => new Promise(resolve => pending.push({ resolve, options })),
+  });
+  await controller.refresh();
+  assert.equal(state.loading, false);
+  assert.match(state.error, /two-minute safety limit/);
+  assert.equal(pending[0].options.client.signal.aborted, true);
+  pending[0].resolve(result('stale'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(state.loadedAt, null);
+  assert.deepEqual(state.data.users, []);
+});
