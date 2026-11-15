@@ -33,7 +33,7 @@ test('identifies ownerless groups as gaps and escapes labels', () => {
   assert.match(html,/Export assessment JSON/);
 });
 test('render search filters controls', () => {
-  const html=renderFrameworkAlignment(data,coverage,{search:'endpoint hardening'});
+  const html=renderFrameworkAlignment(data,coverage,{search:'endpoint configuration hardening'});
   assert.match(html,/Endpoint configuration hardening/);
   assert.doesNotMatch(html,/Strong authentication policy/);
 });
