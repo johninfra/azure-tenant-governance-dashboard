@@ -12,7 +12,7 @@ The app does **not** grant access to another tenant or Azure subscription by its
 
 ### Live tenant dashboard
 
-![Live Azure Tenant Governance Dashboard](screenshots/azure-live-tenant-dashboard.png)
+![Live Azure Tenant Governance Dashboard](screenshots/Entra-IAM-Governance-Dashboard.png)
 
 ### Azure Static Web App deployment
 
