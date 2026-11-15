@@ -11,7 +11,7 @@ export function createDashboardController({ state, render, isInteractionRequired
     const changed = accountKey(state.account) !== accountKey(account);
     if (changed || !account) {
       sessions.cancel();
-      Object.assign(state, emptySnapshot(), { loading: false, loadStage: '', error: '', search: '' });
+      Object.assign(state, emptySnapshot(), { loading: false, loadStage: '', loadProgress: {}, error: '', search: '' });
     }
     state.account = account;
     if (syncMsal && changed) state.msal?.setActiveAccount(account);
@@ -27,7 +27,7 @@ export function createDashboardController({ state, render, isInteractionRequired
       if (accountKey(state.account) !== run.key || state.msal !== msal ||
         (state.config.subscriptionId || '') !== subscriptionId) throw aborted();
     };
-    Object.assign(state, emptySnapshot(), { loading: true, loadStage: 'Requesting Microsoft access tokens…', error: '' });
+    Object.assign(state, emptySnapshot(), { loading: true, loadStage: 'Requesting Microsoft access tokens…', loadProgress: {}, error: '' });
     render();
     let timer;
     try {
@@ -40,7 +40,15 @@ export function createDashboardController({ state, render, isInteractionRequired
           }
         },
       });
-      const collected = collect({ client, subscriptionId, check });
+      const collected = collect({ client, subscriptionId, check, onProgress: ({ key, status, detail }) => {
+        if (!sessions.canCommit(run, state.account)) return;
+        state.loadProgress = { ...state.loadProgress, [key]: { status, detail } };
+        const entries = Object.entries(state.loadProgress);
+        const completed = entries.filter(([, value]) => !['running', 'authorizing'].includes(value.status)).length;
+        const running = entries.filter(([, value]) => ['running', 'authorizing'].includes(value.status)).map(([name]) => name);
+        state.loadStage = `${completed} datasets processed • ${running.length ? 'Working on: ' + running.slice(0, 3).join(', ') : 'Preparing next stage'}`;
+        render();
+      } });
       // A single pending MSAL or Graph operation must never hold the page indefinitely.
       // The underlying session is cancelled when the deadline is reached.
       const deadline = new Promise((_, reject) => {
