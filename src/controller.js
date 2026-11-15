@@ -40,8 +40,13 @@ export function createDashboardController({ state, render, isInteractionRequired
           }
         },
       });
-      const collected = collect({ client, subscriptionId, check, onProgress: ({ key, status, detail }) => {
+      const collected = collect({ client, subscriptionId, check, onProgress: ({ key, status, detail, phase }) => {
         if (!sessions.canCommit(run, state.account)) return;
+        if (phase) {
+          state.loadStage = phase;
+          render();
+          return;
+        }
         state.loadProgress = { ...state.loadProgress, [key]: { status, detail } };
         const entries = Object.entries(state.loadProgress);
         const completed = entries.filter(([, value]) => !['running', 'authorizing'].includes(value.status)).length;
@@ -58,7 +63,10 @@ export function createDashboardController({ state, render, isInteractionRequired
       });
       const snapshot = await Promise.race([collected, deadline]);
       check();
-      if (sessions.canCommit(run, state.account)) Object.assign(state, snapshot);
+      if (sessions.canCommit(run, state.account)) {
+        state.loadStage = 'Rendering governance dashboard…';
+        Object.assign(state, snapshot);
+      }
     } catch (error) {
       if (!isAbort(error) && sessions.canCommit(run, state.account)) state.error = error.message;
     } finally {
