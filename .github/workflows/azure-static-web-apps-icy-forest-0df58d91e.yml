@@ -29,11 +29,11 @@ jobs:
           set -euo pipefail
           npm install
 
-      - name: Build multitenant dashboard
+      - name: Validate tests and build multitenant dashboard
         shell: bash
         run: |
           set -euo pipefail
-          npm run build
+          npm run validate
 
       - name: Deploy to Azure Static Web Apps
         shell: bash
