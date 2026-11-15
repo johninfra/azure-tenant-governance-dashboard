@@ -6,6 +6,7 @@ import * as snapshots from '../src/snapshot.js';
 import * as governance from '../src/governance.js';
 import { createDashboardController } from '../src/controller.js';
 import { renderMfaView, renderOverviewView } from '../src/views.js';
+import { renderIdentityRisk } from '../src/identity-risk.js';
 import { renderTopology } from './helpers/topology.js';
 import { findingsCsv } from '../src/export.js';
 import { collectTenant } from '../src/collect.js';
@@ -30,7 +31,7 @@ async function appHarness() {
     getAllAccounts() { return this.active ? [this.active] : []; }
     setActiveAccount(account) { this.active = account; }
   }
-  const context = vm.createContext({ ...snapshots, createDashboardController, renderMfaView, renderOverviewView, findingsCsv,
+  const context = vm.createContext({ ...snapshots, createDashboardController, renderMfaView, renderOverviewView, renderIdentityRisk, findingsCsv,
     resolvedPrivilegedRows: governance.privilegedRows, privilegedUserIds: governance.privilegedUserIds,
     azureRows: governance.azureRows, usableMfaRegistration: governance.usableMfaRegistration,
     policyHasMandatoryAuthControl: governance.policyHasMandatoryAuthControl, renderTopology,
@@ -49,7 +50,7 @@ async function appHarness() {
 test('all original tabs render with preserved layout and no unescaped directory content', async () => {
   const app = await appHarness();
   app.state.data.users[0].displayName = '<img src=x onerror=alert(1)>';
-  for (const tab of ['overview', 'groups', 'privileged', 'mfa', 'roles', 'activity', 'conditionalAccess', 'topology', 'rbac', 'findings', 'setup']) {
+  for (const tab of ['overview', 'groups', 'privileged', 'mfa', 'roles', 'activity', 'conditionalAccess', 'topology', 'rbac', 'identityRisk', 'findings', 'setup']) {
     app.state.tab = tab; app.render();
     assert.match(app.root.innerHTML, /class="shell"/); assert.match(app.root.innerHTML, /class="nav"/);
     assert.ok(app.root.innerHTML.includes('data-tab="topology"'));
@@ -70,7 +71,7 @@ test('unreadable group membership is labelled unknown and effective roles show t
   const app = await appHarness();
   delete app.state.data.groupMemberships.g; app.state.tab = 'groups'; app.render();
   assert.match(app.root.innerHTML, /Membership unavailable; effective access is unknown/);
-  app.state.tab = 'privileged'; app.render(); assert.match(app.root.innerHTML, /Via group: Admins/);
+  app.state.tab = 'privileged'; app.render(); assert.match(app.root.innerHTML, /Inherited/); assert.match(app.root.innerHTML, /Admins/);
   app.state.tab = 'rbac'; app.render(); assert.match(app.root.innerHTML, /Via group: Admins/);
 });
 
