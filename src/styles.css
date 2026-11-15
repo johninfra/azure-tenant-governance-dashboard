@@ -55,3 +55,15 @@
 /* Privileged Entra and Azure RBAC inventory */
 .access-page{display:grid;gap:18px}.access-intro{display:flex;justify-content:space-between;align-items:start;gap:18px;padding:4px 2px}.access-intro h2{font-size:26px;margin:7px 0}.access-intro p{max-width:780px;line-height:1.55;margin:0}.access-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.access-metric{min-width:0;padding:18px;background:linear-gradient(160deg,#10243b,#091726);border:1px solid #2a415a;border-radius:14px}.access-metric span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#9bb9d7}.access-metric strong{display:block;font-size:32px;letter-spacing:-.04em;margin:8px 0 4px}.access-metric small{font-size:12px;color:#8fa8bf}.access-metric.critical{border-color:#764050;background:linear-gradient(145deg,#261b2b,#0d1a2b)}.access-metric.critical strong{color:#ffd1d8}.access-table-card{padding:20px}.access-table{min-width:850px}.access-table th{padding-top:15px;padding-bottom:15px}.access-table td{padding-top:16px;padding-bottom:16px;line-height:1.45}.access-table tbody tr:hover{background:rgba(60,122,181,.08)}.access-table .priority-row{background:rgba(154,50,70,.075)}.access-table td strong{font-weight:730}.priority-note{margin-top:6px;font-size:11px;color:#eda8b4}.priority-note .badge{font-size:10px}.access-path{font-size:12px;color:#b8d9f4;font-weight:750}.scope-code,.access-table td code{overflow-wrap:anywhere;word-break:break-word;white-space:normal;font-size:11px;color:#b4d5f2}.access-table-card .notice{margin-bottom:0}
 @media(max-width:1000px){.access-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.access-metrics{grid-template-columns:1fr 1fr}.access-metric{padding:12px}.access-metric strong{font-size:25px}.access-intro{flex-direction:column}.access-intro h2{font-size:23px}}
+
+/* Identity risk and least-privilege review */
+.identity-risk-page .risk-review-list{display:grid;gap:12px}
+.identity-risk-page .risk-review-item{border:1px solid #263e57;background:linear-gradient(135deg,#0b1b2d,#081522);border-radius:12px;padding:17px 19px}
+.identity-risk-page .risk-review-top h3{font-size:17px;margin:10px 0 5px;letter-spacing:-.02em}
+.identity-risk-page .risk-review-top p{font-size:12px;margin:0;overflow-wrap:anywhere}
+.identity-risk-page .risk-review-heading{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.identity-risk-page .risk-review-detail{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px;border-top:1px solid #263b52;padding-top:14px}
+.identity-risk-page .risk-detail-label{display:block;color:#75b8ff;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+.identity-risk-page .risk-review-detail p{font-size:13px;color:#bacde0;line-height:1.6;margin:0;overflow-wrap:anywhere}
+.identity-risk-page .access-table-card>.notice{margin-bottom:0}
+@media(max-width:760px){.identity-risk-page .risk-review-detail{grid-template-columns:1fr;gap:14px}}
