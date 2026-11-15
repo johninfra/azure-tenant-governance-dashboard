@@ -148,7 +148,7 @@ function renderTab(){
  if(!configured())return '<div class="card empty">Configure your Entra application first in the <strong>Setup</strong> tab.</div>';
  if(!state.account)return '<div class="card empty">Sign in with the Entra account you want to use for the read-only review.</div>';
  if(!state.loadedAt&&!state.loading)return '<div class="card empty">Signed in successfully. Select <strong>Refresh tenant data</strong> to build the first governance snapshot.</div>';
- if(state.loading&&!state.loadedAt)return '<div class="card empty">Querying Microsoft Graph and Azure Resource Manager…</div>';
+ if(state.loading&&!state.loadedAt)return `<div class="card empty"><div class="loading-progress"><span class="status-dot"></span><strong>Loading tenant inventory</strong><p>${esc(state.loadStage||'Preparing tenant data…')}</p><p class="muted small">The refresh stops with an error if it exceeds two minutes. No additional administrator permissions are needed.</p></div></div>`;
  return ({groups:renderGroups,privileged:renderPrivileged,mfa:renderMfa,roles:renderRoles,activity:renderActivity,conditionalAccess:renderConditionalAccess,topology:()=>renderTopology(state,{esc,badge,toolbar}),rbac:renderRbac,findings:renderFindings,frameworks:()=>renderFrameworkAlignment(state.data,state.coverage,{search:state.search,loadedAt:state.loadedAt})}[state.tab]||renderOverview)();
 }
 function renderOverview(){return renderOverviewView(state,{esc,badge,stat,pct,review:reviewAssessment(),privilegedCount:privilegedUsers().size,membershipCount:groupMembershipCount()})}
