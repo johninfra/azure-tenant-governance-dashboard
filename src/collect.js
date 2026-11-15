@@ -194,6 +194,7 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
     warnings.push('Azure inventory was skipped because no Subscription ID is configured.');
   }
 
+  onProgress({ phase: 'Resolving Azure and Entra role assignments…' });
   enrichAndResolve(data);
   const groupIds = new Set([...data.privilegedRoleAssignments, ...data.privilegedRoleEligibilities]
     .filter(a => a._principalType === 'Group').map(a => a.principalId));
@@ -204,6 +205,7 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
   if (referencedGroups.some(group => group.visibility === 'HiddenMembership')) status('effectivePrivileges', 'partial', 'A privileged group has hidden membership that cannot be certified with the requested scopes.');
   if (coverage.groups.status !== 'available' || coverage.privilegedRoleAssignments.status !== 'available' ||
     coverage.privilegedRoleEligibilities.status !== 'available') status('effectivePrivileges', 'partial', 'Assignments or group inventory are incomplete; some indirect privilege may be unknown.');
+  onProgress({ phase: 'Resolving effective group access…' });
   enrichAndResolve(data);
 
   const report = new Map(data.mfa.map(row => [row.id, row]));
@@ -212,7 +214,9 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
     (typeof report.get(user.id)?.isMfaCapable !== 'boolean' || typeof report.get(user.id)?.isMfaRegistered !== 'boolean'))) {
     status('mfa', 'partial', 'Some in-scope users have no registration/capability result. Missing results are unknown.');
   }
+  onProgress({ phase: 'Calculating governance findings…' });
   data.findings = buildGovernanceFindings(data, coverage, { subscriptionId, now: now().getTime() });
+  onProgress({ phase: 'Publishing completed tenant snapshot…' });
   check(); snapshot.loadedAt = now();
   return snapshot;
 }
