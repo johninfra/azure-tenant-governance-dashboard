@@ -139,9 +139,16 @@ function render(){
  ${state.warnings.map(w=>`<div class="notice warn"><strong>Partial data:</strong> ${esc(w)}</div>`).join('')}
  <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('privileged','Privileged Access')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('activity','Recent Activity')}${nav('conditionalAccess','Conditional Access')}${nav('topology','Azure Topology')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('frameworks','Framework Alignment')}${nav('setup','Setup')}</nav>
  ${renderCoverage()}
- ${renderTab()}
+ ${safeRenderTab()}
  <footer class="footer"><span>Read-only governance utility • no secrets required in source</span><span>${state.loadedAt?'Snapshot: '+esc(state.loadedAt.toLocaleString()):'No tenant snapshot loaded yet'}</span></footer>
  </main>`;wire();
+}
+function safeRenderTab(){
+ try { return renderTab(); }
+ catch (error) {
+  console.error('Dashboard view rendering failed:', error);
+  return `<div class="notice error"><strong>Dashboard rendering error:</strong> ${esc(norm(error))}. Tenant collection may have completed, but the selected page could not render. Open DevTools Console for the error location.</div>`;
+ }
 }
 function renderTab(){
  if(state.tab==='setup')return renderSetup();
