@@ -1,6 +1,6 @@
-# Azure Tenant Governance Dashboard
+# Entra IAM Governance Dashboard
 
-A read-only, multi-tenant JavaScript/Vite web application for Microsoft Entra ID and Azure access governance. The dashboard lets authorized users sign in with Microsoft Entra ID, queries Microsoft Graph and Azure Resource Manager with delegated access, and produces an interactive governance snapshot focused on identity posture, MFA, privileged access, Azure RBAC, least privilege, recent activity, and Azure resource topology.
+A read-only, multi-tenant JavaScript/Vite application for Microsoft Entra identity governance, privileged access visibility, Azure RBAC assessment, and security-framework evidence mapping. The dashboard lets authorized users sign in with Microsoft Entra ID, queries Microsoft Graph and Azure Resource Manager with delegated access, and produces an interactive governance snapshot focused on identity posture, MFA, privileged access, Azure RBAC, least privilege, recent activity, and Azure resource topology.
 
 ## Live deployment
 
@@ -18,23 +18,34 @@ The app does **not** grant access to another tenant or Azure subscription by its
 
 ![Azure Static Web App deployment](screenshots/azure-static-web-app.png)
 
-## What it does
+## Current capabilities
 
-- Inventories Microsoft Entra users, guest users, groups, and service principals.
-- Syncs tenant groups with their direct user members in an expandable **Groups & Members** view.
-- Reviews MFA-capable, MFA-registered, and passwordless-capable users.
-- Enumerates active Microsoft Entra directory roles and their members.
-- Provides a **Recent Activity** view for Entra directory audit events and, when licensing and permissions allow, tenant sign-in telemetry.
-- Provides a **Privileged Access** view for users with active or eligible Entra privileged roles, including role name, scope, assignment type, and available start/end timestamps.
-- Inventories Azure RBAC role assignments and role definitions at subscription and resource scopes.
+The application currently exposes 13 navigation areas: **Overview, Groups & Members, Privileged Access, MFA posture, Entra roles, Recent Activity, Conditional Access, Azure Topology, Azure RBAC, Identity Risk, Findings, Framework Alignment, and Setup.** The on-screen product name is **Entra IAM Governance Dashboard**; the GitHub repository retains its original name.
+
+- **Tenant overview:** Inventories Microsoft Entra users, guests, groups, and service principals, with summary metrics, highest-priority findings, Conditional Access policy counts, Azure resources, and a coverage-aware review score.
+- **Groups & Members:** Searchable, expandable group inventory with direct user members, account state, group types, and resolved privileged Entra roles. Group owners are collected to support ownership checks.
+- **MFA posture:** Per-user registration methods and reported MFA registration/capability, plus authentication-method policy inventory and targeting. Registered or capable does **not** mean MFA is enforced; enforcement is displayed as Unknown.
+- **Entra roles:** Active directory role membership inventory and searchable principal/role views.
+- **Recent Activity:** Directory audit events, sign-in events from the last seven days (up to 25 returned by the current query), and graceful handling of license, permission, or throttling limitations. Audit logs are not a substitute for sign-in telemetry.
+- **Privileged Access:** Active and PIM-eligible Entra directory assignments, access paths (direct or group-inherited), role/scope, and dates where exposed; higher-impact roles are presented first.
+- **Azure RBAC:** Searchable role assignments and definitions, including inherited/effective user access paths where resolvable; role tiers prioritize Owner, User Access Administrator, Role Based Access Control Administrator, and Contributor, with broader scopes ranked first within tiers. Ranking is triage guidance, not a complete effective-permissions calculation.
 - Provides a live **Azure Topology** view for subscription resources, including VNet → subnet → NIC → VM relationships with Public IP and NSG context.
-- Flags broad Azure assignments such as Owner, Contributor, and User Access Administrator.
+- **Identity Risk:** Evidence-backed, prioritized advisory reviews of active Global Administrator / Privileged Role Administrator assignments and broad-scope Azure privileged roles. Emergency-named accounts are flagged for validation rather than automatic removal.
+- **Conditional Access:** Read-only inventory of policy state, assignments, targeting, grant controls, and session controls when readable. This is not a policy simulation or proof of enforced coverage.
+- **Framework Alignment:** Evidence crosswalk to **NIST CSF 2.0**, **ISO/IEC 27001:2022 Annex A**, and **CIS Controls v8**, including observed, unknown, and unassessed controls and JSON export. The app does not certify compliance.
+- **Governance Findings:** Heuristic checks for broad Azure assignments such as Owner, Contributor, and User Access Administrator.
 - Flags privileged Entra identities that are not reported as MFA-capable.
 - Flags guest identities with broad Azure access.
 - Produces a lightweight governance review score.
-- Exports findings as JSON or CSV.
+- Exports findings as **JSON or CSV**, with snapshot/coverage context; the framework crosswalk can also be exported as JSON.
 
 The application is intentionally **read-only**. It does not perform Microsoft Graph or Azure Resource Manager write operations.
+
+## How to interpret the assessment
+
+This is an evidence-assisted **review tool**, not a live policy enforcement system, vulnerability scanner, compliance attestation, or access-remediation engine. A flagged role is a candidate for human review, not proof that access is inappropriate. Missing Graph/ARM data is visibly partial, unavailable, or skipped and must not be interpreted as a pass. The numeric governance score is withheld unless all tracked sources are available.
+
+The framework crosswalk maps selected collected signals to relevant control families; for example, access-review completion, endpoint hardening, and actual Conditional Access enforcement require independent evidence not collected here. MFA registration, reported capability, and enforcement are separate concepts. The dashboard never changes tenant configuration.
 
 ## Multi-tenant model
 
@@ -79,6 +90,7 @@ Browser SPA
   |      |-- Role Eligibility Schedule Instances
   |      |-- Authentication Methods Registration Report
   |      |-- Directory Audit Logs
+  |      |-- Conditional Access Policy / Authentication Methods Policy
   |      +-- Sign-in Logs when available
   |
   +-- Azure Resource Manager
@@ -91,7 +103,7 @@ Browser SPA
          +-- Virtual Machines
 ```
 
-There is no application backend. Access tokens are handled by MSAL in browser session storage. Tenant data remains in browser memory unless the user explicitly exports a findings file.
+Framework alignment and identity-risk review are computed client-side from the collected evidence. There is no application backend. Access tokens are handled by MSAL in browser session storage. Tenant data remains in browser memory unless the user explicitly exports a findings file.
 
 ## Permission model
 
@@ -262,6 +274,8 @@ The repository includes GitHub Actions automation for Azure Static Web Apps depl
 
 ## Portfolio value
 
+The current project showcases the implementation of a multi-tenant, read-only **identity governance and cloud access review console**—not simply a static reporting page. It combines delegated authorization, Graph and ARM data collection, privilege-aware triage, derived effective access paths, evidence coverage, client-side analytics, and automated validation/deployment.
+
 This project demonstrates hands-on work with:
 
 - Microsoft Entra ID
@@ -274,6 +288,9 @@ This project demonstrates hands-on work with:
 - Microsoft Entra privileged role visibility
 - MFA posture review
 - identity governance
+- identity risk triage and privileged-role prioritization
+- Conditional Access policy inventory and authentication-method posture
+- NIST CSF 2.0, ISO/IEC 27001:2022 Annex A, and CIS Controls v8 evidence mapping
 - audit and sign-in telemetry
 - least privilege
 - Azure resource topology
@@ -281,6 +298,13 @@ This project demonstrates hands-on work with:
 - Azure Static Web Apps
 - GitHub Actions / GitHub-to-Azure deployment workflows
 - browser-based security boundaries for public-client SPAs
+
+## Source-of-truth notes
+
+- The UI title is **Entra IAM Governance Dashboard**; the repository URL and deployment hostname are unchanged.
+- Feature behavior is implemented in `src/main.js`, `src/collect.js`, `src/governance.js`, `src/identity-risk.js`, `src/frameworks.js`, and supporting modules.
+- Test coverage lives under `tests/` and `npm run validate` runs tests plus a production build. These synthetic tests are not a substitute for checking permissions and behavior against a live Entra tenant.
+- See [architecture and trust boundaries](docs/ARCHITECTURE.md), [validation guidance](docs/VALIDATION.md), and [security policy](SECURITY.md).
 
 ## Important design principle
 
