@@ -5,6 +5,7 @@ import { emptySnapshot, assessment, DATASETS, accountKey } from './snapshot.js';
 import { createDashboardController } from './controller.js';
 import { renderMfaView, renderOverviewView } from './views.js';
 import { findingsCsv } from './export.js';
+import { renderIdentityRisk } from './identity-risk.js';
 import { assessFrameworks, frameworkExport, renderFrameworkAlignment } from './frameworks.js';
 import { privilegedRows as resolvedPrivilegedRows, privilegedUserIds, azureRows, usableMfaRegistration, policyHasMandatoryAuthControl } from './governance.js';
 
@@ -137,7 +138,7 @@ function render(){
  ${state.error?`<div class="notice error"><strong>Error:</strong> ${esc(state.error)}</div>`:''}
  ${state.mfaUnavailable&&!Object.keys(state.data.userAuthMethods||{}).length?`<div class="notice info"><strong>MFA report unavailable:</strong> ${esc(state.mfaMessage)}</div>`:''}
  ${state.warnings.map(w=>`<div class="notice warn"><strong>Partial data:</strong> ${esc(w)}</div>`).join('')}
- <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('privileged','Privileged Access')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('activity','Recent Activity')}${nav('conditionalAccess','Conditional Access')}${nav('topology','Azure Topology')}${nav('rbac','Azure RBAC')}${nav('findings','Findings')}${nav('frameworks','Framework Alignment')}${nav('setup','Setup')}</nav>
+ <nav class="nav">${nav('overview','Overview')}${nav('groups','Groups & Members')}${nav('privileged','Privileged Access')}${nav('mfa','MFA posture')}${nav('roles','Entra roles')}${nav('activity','Recent Activity')}${nav('conditionalAccess','Conditional Access')}${nav('topology','Azure Topology')}${nav('rbac','Azure RBAC')}${nav('identityRisk','Identity Risk')}${nav('findings','Findings')}${nav('frameworks','Framework Alignment')}${nav('setup','Setup')}</nav>
  ${renderCoverage()}
  ${safeRenderTab()}
  <footer class="footer"><span>Read-only governance utility • no secrets required in source</span><span>${state.loadedAt?'Snapshot: '+esc(state.loadedAt.toLocaleString()):'No tenant snapshot loaded yet'}</span></footer>
@@ -156,7 +157,7 @@ function renderTab(){
  if(!state.account)return '<div class="card empty">Sign in with the Entra account you want to use for the read-only review.</div>';
  if(!state.loadedAt&&!state.loading)return '<div class="card empty">Signed in successfully. Select <strong>Refresh tenant data</strong> to build the first governance snapshot.</div>';
  if(state.loading&&!state.loadedAt)return `<div class="card empty"><div class="loading-progress"><span class="status-dot"></span><strong>Loading tenant inventory</strong><p>${esc(state.loadStage||'Preparing tenant data…')}</p><p class="muted small">The refresh stops with an error if it exceeds two minutes. No additional administrator permissions are needed.</p></div></div>`;
- return ({groups:renderGroups,privileged:renderPrivileged,mfa:renderMfa,roles:renderRoles,activity:renderActivity,conditionalAccess:renderConditionalAccess,topology:()=>renderTopology(state,{esc,badge,toolbar}),rbac:renderRbac,findings:renderFindings,frameworks:()=>renderFrameworkAlignment(state.data,state.coverage,{search:state.search,loadedAt:state.loadedAt})}[state.tab]||renderOverview)();
+ return ({groups:renderGroups,privileged:renderPrivileged,mfa:renderMfa,roles:renderRoles,activity:renderActivity,conditionalAccess:renderConditionalAccess,topology:()=>renderTopology(state,{esc,badge,toolbar}),rbac:renderRbac,identityRisk:()=>renderIdentityRisk(state,{esc,badge}),findings:renderFindings,frameworks:()=>renderFrameworkAlignment(state.data,state.coverage,{search:state.search,loadedAt:state.loadedAt})}[state.tab]||renderOverview)();
 }
 function renderOverview(){return renderOverviewView(state,{esc,badge,stat,pct,review:reviewAssessment(),privilegedCount:privilegedUsers().size,membershipCount:groupMembershipCount()})}
 function renderGroups(){
