@@ -54,3 +54,21 @@ test('a stalled token or collector stops loading at the refresh deadline', async
   assert.equal(state.loadedAt, null);
   assert.deepEqual(state.data.users, []);
 });
+
+test('collection progress identifies the currently running dataset', async () => {
+  const state = { ...emptySnapshot(), account: a, config: {}, msal: { setActiveAccount() {} } };
+  const stages = [];
+  const controller = createDashboardController({
+    state, render() { stages.push(state.loadStage); }, makeClient: value => value,
+    collect: async ({ onProgress }) => {
+      onProgress({ key: 'users', status: 'running' });
+      onProgress({ key: 'users', status: 'available' });
+      onProgress({ key: 'groups', status: 'running' });
+      return result('done');
+    },
+  });
+  await controller.refresh();
+  assert.ok(stages.some(stage => stage?.includes('Working on: groups')));
+  assert.equal(state.loading, false);
+  assert.equal(state.loadStage, '');
+});
