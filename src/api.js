@@ -20,7 +20,7 @@ export function waitForRetry(ms, signal) {
 const API_ORIGINS = new Set(['https://graph.microsoft.com', 'https://management.azure.com']);
 
 export function createApiClient({ getToken, signal, check = () => {}, fetchImpl = fetch,
-  sleep = waitForRetry, timeoutMs = 30000, maxRetries = 2 }) {
+  sleep = waitForRetry, timeoutMs = 30000, maxRetries = 2, onRequest = () => {} }) {
   async function api(url, scopes, { headers = {}, origin } = {}) {
     check();
     const target = new URL(url);
@@ -32,6 +32,7 @@ export function createApiClient({ getToken, signal, check = () => {}, fetchImpl 
       check();
       const token = await getToken(scopes, { forceRefresh: renewed });
       check();
+      onRequest(target.href);
       const controller = new AbortController();
       const cancel = () => controller.abort();
       signal?.addEventListener('abort', cancel, { once: true });
