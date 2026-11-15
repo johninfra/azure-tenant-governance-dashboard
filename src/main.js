@@ -131,7 +131,7 @@ function toolbar(p){return `<div class="toolbar"><input class="search" data-sear
 function render(){
  const c=configured();
  app.innerHTML=`<main class="shell">
- <header class="topbar"><div><div class="eyebrow">Microsoft Entra ID + Azure RBAC</div><h1>Azure Tenant Governance Dashboard</h1><p class="subtitle">Read-only identity and access governance for tenant inventory, MFA posture, Conditional Access, privileged Entra roles, Azure RBAC, and least-privilege findings.</p></div>
+ <header class="topbar"><div><div class="eyebrow">Microsoft Entra ID + Azure RBAC</div><h1>Entra IAM Governance Dashboard</h1><p class="subtitle">Read-only identity and access governance for tenant inventory, MFA posture, Conditional Access, privileged Entra roles, Azure RBAC, and least-privilege findings.</p></div>
  <div class="top-actions">${connectionStatus()}${c&&state.account?`<button class="btn primary" data-action="load" ${state.loading||state.authBusy?'disabled':''}>${state.loading?'Loading…':'Refresh tenant data'}</button><button class="btn" data-action="signout" ${state.authBusy?'disabled':''}>Sign out</button>`:c?`<button class="btn primary" data-action="signin" ${!state.authReady||state.authBusy?'disabled':''}>${state.authBusy?'Completing authentication...':'Sign in with Microsoft'}</button>`:'<button class="btn primary" data-tab="setup">Configure app</button>'}</div></header>
  ${state.account?`<div class="notice"><strong>Signed in:</strong> ${esc(accountName())}. <strong>Tenant:</strong> ${esc(signedInTenantId()||'unknown')}. Tokens remain in session storage.</div>`:''}
  ${state.error?`<div class="notice error"><strong>Error:</strong> ${esc(state.error)}</div>`:''}
