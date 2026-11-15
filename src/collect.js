@@ -15,13 +15,13 @@ export function groupUsersUrl(id, transitive = false) {
   return `${GRAPH}/groups/${encodeURIComponent(id)}/${transitive ? 'transitiveMembers' : 'members'}/microsoft.graph.user?$select=${USER_FIELDS}&$top=999&$count=true`;
 }
 
-export async function collectTenant({ client, subscriptionId = '', check = () => {}, now = () => new Date() }) {
+export async function collectTenant({ client, subscriptionId = '', check = () => {}, now = () => new Date(), onProgress = () => {} }) {
   const snapshot = emptySnapshot(), { data, coverage, warnings } = snapshot;
   const message = error => error?.message || String(error);
-  function status(key, state, detail = '') { coverage[key] = { status: state, detail }; }
+  function status(key, state, detail = '') { coverage[key] = { status: state, detail }; onProgress({ key, status: state, detail }); }
   async function collect(key, work, assign = value => { data[key] = value; }) {
     try {
-      check(); const value = await work(); check(); assign(value);
+      check(); onProgress({ key, status: 'running' }); const value = await work(); check(); assign(value);
       status(key, 'available'); return true;
     } catch (error) {
       if (isAbort(error)) throw error;
@@ -36,6 +36,7 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
   const paged = (url, scopes, options) => client.paged(url, scopes, options);
   async function perObject(key, items, worker, target) {
     let failures = 0;
+    onProgress({ key, status: 'running' });
     const pairs = await mapLimit(items, 4, async item => {
       try { const value = await worker(item); check(); return [item.id, value]; }
       catch (error) {
@@ -99,7 +100,7 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
   snapshot.mfaUnavailable = coverage.mfa.status !== 'available'; snapshot.mfaMessage = coverage.mfa.detail;
   // Detailed method access is an independent feature. Denied consent must not block inventory.
   try {
-    if (data.users.length) await client.authorize(SCOPES.methods);
+    if (data.users.length) { onProgress({key:'userAuthMethods',status:'authorizing'}); await client.authorize(SCOPES.methods); }
     check();
     await perObject('userAuthMethods', data.users, async user => {
       const methods = await paged(`${GRAPH}/users/${user.id}/authentication/methods`, SCOPES.methods);
@@ -163,7 +164,7 @@ export async function collectTenant({ client, subscriptionId = '', check = () =>
   if (subscriptionId) {
     const arm = `https://management.azure.com/subscriptions/${encodeURIComponent(subscriptionId)}`;
     let allowed = true;
-    try { await client.authorize(SCOPES.arm); check(); }
+    try { onProgress({key:'azureRoleAssignments',status:'authorizing'}); await client.authorize(SCOPES.arm); check(); }
     catch (error) { if (isAbort(error)) throw error; allowed = false;
       for (const key of Object.keys(azure)) status(key, 'unavailable', message(error));
       warnings.push(`Azure access unavailable: ${message(error)}`);
