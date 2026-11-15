@@ -34,7 +34,7 @@ export function createDashboardController({ state, render, isInteractionRequired
       const getToken = createTokenProvider({ msal, account: run.account, check, isInteractionRequired });
       const client = makeClient({ getToken, signal: run.signal, check,
         onRequest: () => {
-          if (sessions.canCommit(run, state.account) && state.loadStage !== 'Querying Microsoft Graph and Azure Resource Manager…') {
+          if (sessions.canCommit(run, state.account) && state.loadStage === 'Requesting Microsoft access tokens…') {
             state.loadStage = 'Querying Microsoft Graph and Azure Resource Manager…';
             render();
           }
