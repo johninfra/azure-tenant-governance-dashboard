@@ -47,6 +47,14 @@ export function renderMfaView(state, { esc, badge, toolbar, authMethodLabel,
   const policy = authPolicyConfigs().slice().sort((a, b) => authPolicyLabel(a.id).localeCompare(authPolicyLabel(b.id)));
   const enabled = policy.filter(method => String(method.state).toLowerCase() === 'enabled').length;
   const answer = value => value === null ? badge('Unknown', 'neutral') : badge(value ? 'Yes' : 'No', value ? 'good' : 'medium');
+  const signInActivityAvailable = ['available', 'partial'].includes(state.coverage.userSignInActivity?.status);
+  const lastSuccessfulSignIn = user => {
+    if (!signInActivityAvailable) return '<span class="muted">Unavailable</span>';
+    const value = user.signInActivity?.lastSuccessfulSignInDateTime;
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return '<span class="muted">No successful sign-in recorded</span>';
+    return `<time datetime="${esc(date.toISOString())}" title="${esc(date.toISOString())}">${esc(date.toLocaleString())}</time>`;
+  };
   return `<section>
     <div class="card"><div class="section-title"><div><h2>Tenant authentication methods policy</h2><div class="muted small">Allowed methods and targeting; policy availability does not prove MFA enforcement</div></div><span class="muted small">${enabled} enabled of ${policy.length} configured methods</span></div>
       ${state.authPolicyUnavailable ? `<div class="notice warn">${esc(state.authPolicyMessage || 'Authentication methods policy unavailable.')}</div>` : policy.length ?
@@ -54,15 +62,15 @@ export function renderMfaView(state, { esc, badge, toolbar, authMethodLabel,
           `<tr><td><strong>${esc(authPolicyLabel(method.id))}</strong></td><td>${badge(String(method.state || 'unknown').toUpperCase(), String(method.state).toLowerCase() === 'enabled' ? 'good' : 'neutral')}</td><td>${esc(authPolicyTargets(method))}</td></tr>`).join('')}</tbody></table></div>` :
         '<div class="empty">No authentication-method policy configurations were returned.</div>'}
     </div>
-    <div class="card"><div class="section-title"><div><h2>User registered authentication methods</h2><div class="muted small">Registration: a method exists. Capability: Graph registration report. Enforcement: not established by this inventory.</div></div></div>
+    <div class="card"><div class="section-title"><div><h2>User registered authentication methods</h2><div class="muted small">Registration: a method exists. Capability: Graph registration report. Enforcement: not established by this inventory. Last successful sign-in: Microsoft Graph user sign-in activity, where available.</div></div></div>
       <div class="notice info"><strong>MFA enforcement is unknown.</strong> Registered methods and MFA capability do not show whether a particular user or sign-in must satisfy MFA. Conditional Access targeting, exclusions, grant alternatives, Security Defaults and other controls require separate validation. SMS and phone methods are not phishing-resistant.</div>
       ${state.authMethodsUnavailable ? `<div class="notice warn"><strong>Detailed methods unavailable:</strong> ${esc(state.authMethodsMessage || 'No readable method inventory.')} Registration-report results, when readable, remain visible.</div>` : ''}
       ${toolbar('Search users, UPNs, or authentication methods...')}
-      <div class="table-wrap"><table><thead><tr><th>User</th><th>Account</th><th>Registered methods</th><th>MFA registered</th><th>MFA capable (report)</th><th>MFA enforced</th></tr></thead><tbody>${users.map(user => {
+      <div class="table-wrap"><table><thead><tr><th>User</th><th>Account</th><th>Registered methods</th><th>MFA registered</th><th>MFA capable (report)</th><th>MFA enforced</th><th>Last successful sign-in</th></tr></thead><tbody>${users.map(user => {
         const known = Object.hasOwn(state.data.userAuthMethods, user.id), methods = methodsFor(user.id);
         const posture = authenticationPosture({ report: report.get(user.id), methods, methodsReadable: known });
-        return `<tr><td><strong>${esc(user.displayName || 'Unnamed user')}</strong><br><span class="muted">${esc(user.userPrincipalName || user.id)}</span></td><td>${answer(typeof user.accountEnabled === 'boolean' ? user.accountEnabled : null)}<br><span class="muted small">Account enabled</span></td><td>${known ? esc([...new Set(methods.map(authMethodLabel))].join(', ') || 'No methods returned') : '<span class="muted">Not readable</span>'}${methods.some(method => String(method['@odata.type']).includes('temporaryAccessPass')) && posture.usableRegistration === false ? '<br><span class="muted small">TAP is expired, unusable, or its validity is unknown.</span>' : ''}</td><td>${answer(posture.registered)}</td><td>${answer(posture.capable)}</td><td>${badge(posture.enforcement, 'neutral')}</td></tr>`;
-      }).join('') || '<tr><td colspan="6" class="empty">No users match the current filter.</td></tr>'}</tbody></table></div>
+        return `<tr><td><strong>${esc(user.displayName || 'Unnamed user')}</strong><br><span class="muted">${esc(user.userPrincipalName || user.id)}</span></td><td>${answer(typeof user.accountEnabled === 'boolean' ? user.accountEnabled : null)}<br><span class="muted small">Account enabled</span></td><td>${known ? esc([...new Set(methods.map(authMethodLabel))].join(', ') || 'No methods returned') : '<span class="muted">Not readable</span>'}${methods.some(method => String(method['@odata.type']).includes('temporaryAccessPass')) && posture.usableRegistration === false ? '<br><span class="muted small">TAP is expired, unusable, or its validity is unknown.</span>' : ''}</td><td>${answer(posture.registered)}</td><td>${answer(posture.capable)}</td><td>${badge(posture.enforcement, 'neutral')}</td><td>${lastSuccessfulSignIn(user)}</td></tr>`;
+      }).join('') || '<tr><td colspan="7" class="empty">No users match the current filter.</td></tr>'}</tbody></table></div>
     </div>
     ${state.mfaUnavailable ? `<div class="notice info"><strong>Registration report unavailable:</strong> ${esc(state.mfaMessage)} Method registration is shown where readable; missing capability remains unknown.</div>` : ''}
   </section>`;
